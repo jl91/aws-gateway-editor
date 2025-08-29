@@ -1,0 +1,851 @@
+<!-- Enhanced AWS Integrations Tab -->
+<mat-tab label="Integrations" [matBadge]="hasIntegration() ? '1' : ''" matBadgeColor="accent"
+         [matBadgeHidden]="!hasIntegration()">
+  <div class="tab-content">
+    
+    <!-- Integration Type Selector -->
+    <div class="integration-header">
+      <h3>AWS Integration Configuration</h3>
+      <mat-form-field appearance="outline" class="integration-type-selector">
+        <mat-label>Integration Type</mat-label>
+        <mat-select formControlName="integrationType" (selectionChange)="onIntegrationTypeChange($event)">
+          <mat-option value="">
+            <mat-icon>not_interested</mat-icon>
+            None (Direct Response)
+          </mat-option>
+          <mat-option value="lambda">
+            <mat-icon>functions</mat-icon>
+            AWS Lambda Function
+          </mat-option>
+          <mat-option value="http">
+            <mat-icon>http</mat-icon>
+            HTTP/HTTP Proxy
+          </mat-option>
+          <mat-option value="aws">
+            <mat-icon>cloud</mat-icon>
+            AWS Service
+          </mat-option>
+          <mat-option value="mock">
+            <mat-icon>bug_report</mat-icon>
+            Mock Response
+          </mat-option>
+          <mat-option value="stepfunctions">
+            <mat-icon>account_tree</mat-icon>
+            AWS Step Functions
+          </mat-option>
+          <mat-option value="vpc-link">
+            <mat-icon>vpn_lock</mat-icon>
+            VPC Link
+          </mat-option>
+        </mat-select>
+        <mat-hint>Choose how this endpoint connects to your backend</mat-hint>
+      </mat-form-field>
+    </div>
+    
+    <!-- Lambda Integration -->
+    <div class="integration-content lambda-integration" 
+         *ngIf="endpointForm.get('integration.type')?.value === 'lambda'">
+      
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>functions</mat-icon>
+          <mat-card-title>Lambda Function Configuration</mat-card-title>
+          <mat-card-subtitle>Configure AWS Lambda function integration</mat-card-subtitle>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="three-quarter-width">
+              <mat-label>Function ARN</mat-label>
+              <input matInput formControlName="lambdaArn" 
+                     placeholder="arn:aws:lambda:region:account:function:name">
+              <button mat-icon-button matSuffix [matMenuTriggerFor]="lambdaMenu" 
+                      matTooltip="Select from existing">
+                <mat-icon>search</mat-icon>
+              </button>
+              <mat-hint>Full ARN of the Lambda function</mat-hint>
+              <mat-error *ngIf="endpointForm.get('integration.lambdaArn')?.hasError('pattern')">
+                Invalid Lambda ARN format
+              </mat-error>
+            </mat-form-field>
+            
+            <mat-menu #lambdaMenu="matMenu">
+              <mat-form-field appearance="standard" class="menu-search">
+                <input matInput placeholder="Search functions..." 
+                       [(ngModel)]="lambdaSearchTerm" [ngModelOptions]="{standalone: true}">
+              </mat-form-field>
+              <button mat-menu-item *ngFor="let func of getFilteredLambdaFunctions()"
+                      (click)="selectLambdaFunction(func)">
+                <mat-icon>functions</mat-icon>
+                {{ func.name }}
+                <span class="menu-item-meta">{{ func.runtime }}</span>
+              </button>
+            </mat-menu>
+            
+            <mat-form-field appearance="outline" class="quarter-width">
+              <mat-label>Alias/Version</mat-label>
+              <input matInput formControlName="lambdaQualifier" 
+                     placeholder="$LATEST">
+              <mat-hint>Optional qualifier</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="third-width">
+              <mat-label>Invocation Type</mat-label>
+              <mat-select formControlName="lambdaInvocationType">
+                <mat-option value="RequestResponse">Request/Response (Sync)</mat-option>
+                <mat-option value="Event">Event (Async)</mat-option>
+                <mat-option value="DryRun">Dry Run (Test)</mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="third-width">
+              <mat-label>Timeout (ms)</mat-label>
+              <input matInput type="number" formControlName="timeout" 
+                     min="1000" max="29000" placeholder="29000">
+              <mat-hint>1-29 seconds</mat-hint>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="third-width">
+              <mat-label>Max Retries</mat-label>
+              <input matInput type="number" formControlName="maxRetries" 
+                     min="0" max="2" placeholder="0">
+              <mat-hint>0-2 retries on failure</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <mat-expansion-panel class="advanced-settings">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>settings</mat-icon>
+                Advanced Lambda Settings
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="form-section">
+              <h4>Execution Role</h4>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>IAM Role ARN (Optional)</mat-label>
+                <input matInput formControlName="lambdaExecutionRole" 
+                       placeholder="arn:aws:iam::account:role/api-gateway-lambda-role">
+                <mat-hint>Leave empty to use default API Gateway execution role</mat-hint>
+              </mat-form-field>
+            </div>
+            
+            <div class="form-section">
+              <h4>Proxy Integration</h4>
+              <mat-slide-toggle formControlName="lambdaProxyIntegration">
+                Use Lambda Proxy Integration
+              </mat-slide-toggle>
+              <p class="toggle-hint">
+                When enabled, API Gateway sends the entire request as input to Lambda and expects 
+                a specific response format
+              </p>
+            </div>
+            
+            <div class="form-section">
+              <h4>Environment Variables</h4>
+              <div class="key-value-list">
+                <div *ngFor="let env of lambdaEnvironmentVars; let i = index" class="key-value-item">
+                  <mat-form-field appearance="outline" class="key-field">
+                    <mat-label>Key</mat-label>
+                    <input matInput [(ngModel)]="env.key" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="value-field">
+                    <mat-label>Value</mat-label>
+                    <input matInput [(ngModel)]="env.value" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button color="warn" (click)="removeLambdaEnvVar(i)">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-button (click)="addLambdaEnvVar()">
+                  <mat-icon>add</mat-icon>
+                  Add Environment Variable
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <!-- HTTP/HTTP Proxy Integration -->
+    <div class="integration-content http-integration" 
+         *ngIf="endpointForm.get('integration.type')?.value === 'http'">
+      
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>http</mat-icon>
+          <mat-card-title>HTTP/HTTP Proxy Configuration</mat-card-title>
+          <mat-card-subtitle>Configure HTTP endpoint integration</mat-card-subtitle>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Endpoint URL</mat-label>
+              <input matInput formControlName="httpEndpoint" 
+                     placeholder="https://api.example.com/resource">
+              <mat-hint>Full URL of the HTTP endpoint</mat-hint>
+              <mat-error *ngIf="endpointForm.get('integration.httpEndpoint')?.hasError('pattern')">
+                Must be a valid HTTP/HTTPS URL
+              </mat-error>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>HTTP Method</mat-label>
+              <mat-select formControlName="httpMethod">
+                <mat-option *ngFor="let method of httpMethods" [value]="method">
+                  <span [class]="'method-badge ' + method.toLowerCase()">{{ method }}</span>
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Connection Type</mat-label>
+              <mat-select formControlName="connectionType">
+                <mat-option value="INTERNET">Internet</mat-option>
+                <mat-option value="VPC_LINK">VPC Link</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-row" *ngIf="endpointForm.get('integration.connectionType')?.value === 'VPC_LINK'">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>VPC Link ID</mat-label>
+              <input matInput formControlName="vpcLinkId" placeholder="abcdef">
+              <mat-hint>ID of the VPC Link to use</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <mat-expansion-panel class="advanced-settings">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>settings</mat-icon>
+                Advanced HTTP Settings
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="form-section">
+              <h4>Proxy Settings</h4>
+              <mat-slide-toggle formControlName="httpProxyIntegration">
+                Use HTTP Proxy Integration
+              </mat-slide-toggle>
+              <p class="toggle-hint">
+                Forward the entire request to the HTTP endpoint without transformation
+              </p>
+            </div>
+            
+            <div class="form-section">
+              <h4>Custom Headers</h4>
+              <div class="key-value-list">
+                <div *ngFor="let header of httpCustomHeaders; let i = index" class="key-value-item">
+                  <mat-form-field appearance="outline" class="key-field">
+                    <mat-label>Header Name</mat-label>
+                    <input matInput [(ngModel)]="header.key" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="value-field">
+                    <mat-label>Header Value</mat-label>
+                    <input matInput [(ngModel)]="header.value" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button color="warn" (click)="removeHttpHeader(i)">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-button (click)="addHttpHeader()">
+                  <mat-icon>add</mat-icon>
+                  Add Header
+                </button>
+              </div>
+            </div>
+            
+            <div class="form-section">
+              <h4>Timeout & Caching</h4>
+              <div class="form-row">
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Timeout (ms)</mat-label>
+                  <input matInput type="number" formControlName="httpTimeout" 
+                         min="50" max="29000" placeholder="29000">
+                  <mat-hint>50ms - 29s</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Cache TTL (seconds)</mat-label>
+                  <input matInput type="number" formControlName="cacheTtl" 
+                         min="0" max="3600" placeholder="0">
+                  <mat-hint>0 = no cache</mat-hint>
+                </mat-form-field>
+              </div>
+            </div>
+          </mat-expansion-panel>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <!-- AWS Service Integration -->
+    <div class="integration-content aws-integration" 
+         *ngIf="endpointForm.get('integration.type')?.value === 'aws'">
+      
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>cloud</mat-icon>
+          <mat-card-title>AWS Service Integration</mat-card-title>
+          <mat-card-subtitle>Integrate directly with AWS services</mat-card-subtitle>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>AWS Service</mat-label>
+              <mat-select formControlName="awsService" (selectionChange)="onAwsServiceChange($event)">
+                <mat-option value="dynamodb">DynamoDB</mat-option>
+                <mat-option value="s3">S3</mat-option>
+                <mat-option value="sns">SNS</mat-option>
+                <mat-option value="sqs">SQS</mat-option>
+                <mat-option value="kinesis">Kinesis</mat-option>
+                <mat-option value="cognito">Cognito</mat-option>
+                <mat-option value="rds">RDS Data API</mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>AWS Region</mat-label>
+              <mat-select formControlName="awsRegion">
+                <mat-option value="us-east-1">US East (N. Virginia)</mat-option>
+                <mat-option value="us-west-2">US West (Oregon)</mat-option>
+                <mat-option value="eu-west-1">EU (Ireland)</mat-option>
+                <mat-option value="eu-central-1">EU (Frankfurt)</mat-option>
+                <mat-option value="ap-southeast-1">Asia Pacific (Singapore)</mat-option>
+                <mat-option value="ap-northeast-1">Asia Pacific (Tokyo)</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          
+          <!-- DynamoDB Specific -->
+          <div *ngIf="endpointForm.get('integration.awsService')?.value === 'dynamodb'" 
+               class="service-specific-config">
+            <h4>DynamoDB Configuration</h4>
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Table Name</mat-label>
+                <input matInput formControlName="dynamoTableName">
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Operation</mat-label>
+                <mat-select formControlName="dynamoOperation">
+                  <mat-option value="GetItem">Get Item</mat-option>
+                  <mat-option value="PutItem">Put Item</mat-option>
+                  <mat-option value="UpdateItem">Update Item</mat-option>
+                  <mat-option value="DeleteItem">Delete Item</mat-option>
+                  <mat-option value="Query">Query</mat-option>
+                  <mat-option value="Scan">Scan</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+          
+          <!-- S3 Specific -->
+          <div *ngIf="endpointForm.get('integration.awsService')?.value === 's3'" 
+               class="service-specific-config">
+            <h4>S3 Configuration</h4>
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Bucket Name</mat-label>
+                <input matInput formControlName="s3BucketName">
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Operation</mat-label>
+                <mat-select formControlName="s3Operation">
+                  <mat-option value="GetObject">Get Object</mat-option>
+                  <mat-option value="PutObject">Put Object</mat-option>
+                  <mat-option value="DeleteObject">Delete Object</mat-option>
+                  <mat-option value="ListObjects">List Objects</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+          
+          <!-- IAM Role -->
+          <div class="form-section">
+            <h4>Execution Role</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>IAM Role ARN</mat-label>
+              <input matInput formControlName="awsExecutionRole" 
+                     placeholder="arn:aws:iam::account:role/api-gateway-service-role">
+              <mat-hint>IAM role with permissions to access the AWS service</mat-hint>
+            </mat-form-field>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <!-- Mock Integration -->
+    <div class="integration-content mock-integration" 
+         *ngIf="endpointForm.get('integration.type')?.value === 'mock'">
+      
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>bug_report</mat-icon>
+          <mat-card-title>Mock Response Configuration</mat-card-title>
+          <mat-card-subtitle>Return static responses for testing</mat-card-subtitle>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Response Status Code</mat-label>
+              <mat-select formControlName="mockStatusCode">
+                <mat-option value="200">200 OK</mat-option>
+                <mat-option value="201">201 Created</mat-option>
+                <mat-option value="204">204 No Content</mat-option>
+                <mat-option value="400">400 Bad Request</mat-option>
+                <mat-option value="404">404 Not Found</mat-option>
+                <mat-option value="500">500 Internal Server Error</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-section">
+            <h4>Mock Response Body</h4>
+            <mat-button-toggle-group formControlName="mockResponseType" class="response-type-toggle">
+              <mat-button-toggle value="json">JSON</mat-button-toggle>
+              <mat-button-toggle value="xml">XML</mat-button-toggle>
+              <mat-button-toggle value="text">Plain Text</mat-button-toggle>
+            </mat-button-toggle-group>
+            
+            <div class="editor-section">
+              <monaco-editor
+                [value]="endpointForm.get('integration.mockResponseBody')?.value"
+                (valueChange)="endpointForm.get('integration.mockResponseBody')?.setValue($event)"
+                [language]="getMockEditorLanguage()"
+                [readOnly]="mode === 'view'"
+                [options]="{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  fontSize: 13
+                }"
+                style="height: 300px;">
+              </monaco-editor>
+            </div>
+            
+            <div class="mock-templates">
+              <button mat-button [matMenuTriggerFor]="mockTemplateMenu">
+                <mat-icon>inventory_2</mat-icon>
+                Use Template
+              </button>
+              
+              <mat-menu #mockTemplateMenu="matMenu">
+                <button mat-menu-item (click)="applyMockTemplate('success')">
+                  Success Response
+                </button>
+                <button mat-menu-item (click)="applyMockTemplate('error')">
+                  Error Response
+                </button>
+                <button mat-menu-item (click)="applyMockTemplate('list')">
+                  List Response
+                </button>
+                <button mat-menu-item (click)="applyMockTemplate('empty')">
+                  Empty Response
+                </button>
+              </mat-menu>
+            </div>
+          </div>
+          
+          <div class="form-section">
+            <h4>Mock Response Headers</h4>
+            <div class="key-value-list">
+              <div *ngFor="let header of mockResponseHeaders; let i = index" class="key-value-item">
+                <mat-form-field appearance="outline" class="key-field">
+                  <mat-label>Header Name</mat-label>
+                  <input matInput [(ngModel)]="header.key" [ngModelOptions]="{standalone: true}">
+                </mat-form-field>
+                <mat-form-field appearance="outline" class="value-field">
+                  <mat-label>Header Value</mat-label>
+                  <input matInput [(ngModel)]="header.value" [ngModelOptions]="{standalone: true}">
+                </mat-form-field>
+                <button mat-icon-button color="warn" (click)="removeMockHeader(i)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+              <button mat-button (click)="addMockHeader()">
+                <mat-icon>add</mat-icon>
+                Add Header
+              </button>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <!-- Step Functions Integration -->
+    <div class="integration-content stepfunctions-integration" 
+         *ngIf="endpointForm.get('integration.type')?.value === 'stepfunctions'">
+      
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>account_tree</mat-icon>
+          <mat-card-title>Step Functions Configuration</mat-card-title>
+          <mat-card-subtitle>Configure AWS Step Functions state machine integration</mat-card-subtitle>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>State Machine ARN</mat-label>
+              <input matInput formControlName="stateMachineArn" 
+                     placeholder="arn:aws:states:region:account:stateMachine:name">
+              <mat-hint>Full ARN of the Step Functions state machine</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Execution Type</mat-label>
+              <mat-select formControlName="stepFunctionExecutionType">
+                <mat-option value="EXPRESS">Express (Synchronous)</mat-option>
+                <mat-option value="STANDARD">Standard (Asynchronous)</mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Execution Name Prefix</mat-label>
+              <input matInput formControlName="executionNamePrefix" 
+                     placeholder="api-execution-">
+              <mat-hint>Optional prefix for execution names</mat-hint>
+            </mat-form-field>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+    
+    <!-- Request/Response Mapping Templates -->
+    <mat-expansion-panel class="mapping-templates-section" 
+                         *ngIf="endpointForm.get('integration.type')?.value && endpointForm.get('integration.type')?.value !== 'mock'">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>transform</mat-icon>
+          Request/Response Mapping Templates
+        </mat-panel-title>
+        <mat-panel-description>
+          Transform requests and responses using Velocity templates
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+      
+      <mat-tab-group>
+        <!-- Request Mapping -->
+        <mat-tab label="Request Mapping">
+          <div class="mapping-content">
+            <mat-slide-toggle formControlName="useRequestMapping">
+              Enable Request Transformation
+            </mat-slide-toggle>
+            
+            <div *ngIf="endpointForm.get('integration.useRequestMapping')?.value" class="template-editor">
+              <div class="template-toolbar">
+                <button mat-button [matMenuTriggerFor]="requestTemplateMenu">
+                  <mat-icon>inventory_2</mat-icon>
+                  Templates
+                </button>
+                
+                <mat-menu #requestTemplateMenu="matMenu">
+                  <button mat-menu-item (click)="applyRequestTemplate('passthrough')">
+                    Passthrough
+                  </button>
+                  <button mat-menu-item (click)="applyRequestTemplate('lambda-proxy')">
+                    Lambda Proxy
+                  </button>
+                  <button mat-menu-item (click)="applyRequestTemplate('dynamodb-put')">
+                    DynamoDB Put Item
+                  </button>
+                  <button mat-menu-item (click)="applyRequestTemplate('sqs-send')">
+                    SQS Send Message
+                  </button>
+                </mat-menu>
+                
+                <button mat-button (click)="validateVelocityTemplate('request')">
+                  <mat-icon>check</mat-icon>
+                  Validate
+                </button>
+                
+                <button mat-button (click)="testRequestMapping()">
+                  <mat-icon>play_arrow</mat-icon>
+                  Test
+                </button>
+              </div>
+              
+              <monaco-editor
+                [value]="endpointForm.get('integration.requestMappingTemplate')?.value"
+                (valueChange)="endpointForm.get('integration.requestMappingTemplate')?.setValue($event)"
+                [language]="'velocity'"
+                [readOnly]="mode === 'view'"
+                [options]="{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  fontSize: 13
+                }"
+                style="height: 250px;">
+              </monaco-editor>
+              
+              <div class="template-variables">
+                <h5>Available Variables</h5>
+                <mat-chip-listbox>
+                  <mat-chip-option (click)="insertVariable('$context')" matTooltip="API Gateway context">
+                    $context
+                  </mat-chip-option>
+                  <mat-chip-option (click)="insertVariable('$input')" matTooltip="Request input">
+                    $input
+                  </mat-chip-option>
+                  <mat-chip-option (click)="insertVariable('$util')" matTooltip="Utility functions">
+                    $util
+                  </mat-chip-option>
+                  <mat-chip-option (click)="insertVariable('$stageVariables')" matTooltip="Stage variables">
+                    $stageVariables
+                  </mat-chip-option>
+                </mat-chip-listbox>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- Response Mapping -->
+        <mat-tab label="Response Mapping">
+          <div class="mapping-content">
+            <mat-slide-toggle formControlName="useResponseMapping">
+              Enable Response Transformation
+            </mat-slide-toggle>
+            
+            <div *ngIf="endpointForm.get('integration.useResponseMapping')?.value" class="template-editor">
+              <div class="template-toolbar">
+                <button mat-button [matMenuTriggerFor]="responseTemplateMenu">
+                  <mat-icon>inventory_2</mat-icon>
+                  Templates
+                </button>
+                
+                <mat-menu #responseTemplateMenu="matMenu">
+                  <button mat-menu-item (click)="applyResponseTemplate('passthrough')">
+                    Passthrough
+                  </button>
+                  <button mat-menu-item (click)="applyResponseTemplate('extract-body')">
+                    Extract Body
+                  </button>
+                  <button mat-menu-item (click)="applyResponseTemplate('error-handling')">
+                    Error Handling
+                  </button>
+                  <button mat-menu-item (click)="applyResponseTemplate('pagination')">
+                    Pagination Wrapper
+                  </button>
+                </mat-menu>
+                
+                <button mat-button (click)="validateVelocityTemplate('response')">
+                  <mat-icon>check</mat-icon>
+                  Validate
+                </button>
+                
+                <button mat-button (click)="testResponseMapping()">
+                  <mat-icon>play_arrow</mat-icon>
+                  Test
+                </button>
+              </div>
+              
+              <monaco-editor
+                [value]="endpointForm.get('integration.responseMappingTemplate')?.value"
+                (valueChange)="endpointForm.get('integration.responseMappingTemplate')?.setValue($event)"
+                [language]="'velocity'"
+                [readOnly]="mode === 'view'"
+                [options]="{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  fontSize: 13
+                }"
+                style="height: 250px;">
+              </monaco-editor>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- Error Mapping -->
+        <mat-tab label="Error Mapping">
+          <div class="mapping-content">
+            <h5>Error Response Mappings</h5>
+            <p class="section-description">
+              Map integration error patterns to HTTP status codes
+            </p>
+            
+            <div class="error-mappings-list">
+              <div *ngFor="let mapping of errorMappings; let i = index" class="error-mapping-item">
+                <mat-form-field appearance="outline" class="pattern-field">
+                  <mat-label>Error Pattern (Regex)</mat-label>
+                  <input matInput [(ngModel)]="mapping.pattern" [ngModelOptions]="{standalone: true}"
+                         placeholder=".*Error.*">
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="status-field">
+                  <mat-label>HTTP Status</mat-label>
+                  <mat-select [(ngModel)]="mapping.statusCode" [ngModelOptions]="{standalone: true}">
+                    <mat-option value="400">400 Bad Request</mat-option>
+                    <mat-option value="401">401 Unauthorized</mat-option>
+                    <mat-option value="403">403 Forbidden</mat-option>
+                    <mat-option value="404">404 Not Found</mat-option>
+                    <mat-option value="500">500 Internal Server Error</mat-option>
+                    <mat-option value="502">502 Bad Gateway</mat-option>
+                    <mat-option value="503">503 Service Unavailable</mat-option>
+                  </mat-select>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="template-field">
+                  <mat-label>Response Template</mat-label>
+                  <textarea matInput [(ngModel)]="mapping.template" [ngModelOptions]="{standalone: true}"
+                            rows="2" placeholder='{"error": "$context.error.message"}'></textarea>
+                </mat-form-field>
+                
+                <button mat-icon-button color="warn" (click)="removeErrorMapping(i)">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+              
+              <button mat-button (click)="addErrorMapping()">
+                <mat-icon>add</mat-icon>
+                Add Error Mapping
+              </button>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </mat-expansion-panel>
+    
+    <!-- Integration Testing -->
+    <mat-expansion-panel class="integration-testing-section" 
+                         *ngIf="endpointForm.get('integration.type')?.value">
+      <mat-expansion-panel-header>
+        <mat-panel-title>
+          <mat-icon>science</mat-icon>
+          Integration Testing
+        </mat-panel-title>
+        <mat-panel-description>
+          Test the integration with sample data
+        </mat-panel-description>
+      </mat-expansion-panel-header>
+      
+      <div class="test-content">
+        <div class="test-input">
+          <h5>Test Request</h5>
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Request Headers</mat-label>
+            <textarea matInput [(ngModel)]="testRequestHeaders" [ngModelOptions]="{standalone: true}"
+                      rows="3" placeholder='{"Content-Type": "application/json"}'></textarea>
+          </mat-form-field>
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Request Body</mat-label>
+            <textarea matInput [(ngModel)]="testRequestBody" [ngModelOptions]="{standalone: true}"
+                      rows="5" placeholder='{"key": "value"}'></textarea>
+          </mat-form-field>
+          
+          <div class="test-actions">
+            <button mat-raised-button color="primary" (click)="testIntegration()"
+                    [disabled]="isTestingIntegration">
+              <mat-icon>play_arrow</mat-icon>
+              {{ isTestingIntegration ? 'Testing...' : 'Test Integration' }}
+            </button>
+            
+            <button mat-button (click)="clearTestResults()">
+              <mat-icon>clear</mat-icon>
+              Clear Results
+            </button>
+          </div>
+        </div>
+        
+        <div class="test-output" *ngIf="testResults">
+          <h5>Test Results</h5>
+          
+          <mat-card [class.success]="testResults.success" [class.error]="!testResults.success">
+            <mat-card-content>
+              <div class="result-status">
+                <mat-icon>{{ testResults.success ? 'check_circle' : 'error' }}</mat-icon>
+                <span>{{ testResults.success ? 'Success' : 'Failed' }}</span>
+                <span class="result-time">{{ testResults.duration }}ms</span>
+              </div>
+              
+              <mat-accordion>
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Transformed Request</mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <pre>{{ testResults.transformedRequest | json }}</pre>
+                </mat-expansion-panel>
+                
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Integration Response</mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <pre>{{ testResults.integrationResponse | json }}</pre>
+                </mat-expansion-panel>
+                
+                <mat-expansion-panel>
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Transformed Response</mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <pre>{{ testResults.transformedResponse | json }}</pre>
+                </mat-expansion-panel>
+                
+                <mat-expansion-panel *ngIf="testResults.logs">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>Execution Logs</mat-panel-title>
+                  </mat-expansion-panel-header>
+                  <pre class="execution-logs">{{ testResults.logs }}</pre>
+                </mat-expansion-panel>
+              </mat-accordion>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </div>
+    </mat-expansion-panel>
+    
+    <!-- Integration Summary -->
+    <div class="integration-summary" *ngIf="endpointForm.get('integration.type')?.value">
+      <mat-card>
+        <mat-card-header>
+          <mat-icon mat-card-avatar>info</mat-icon>
+          <mat-card-title>Integration Summary</mat-card-title>
+        </mat-card-header>
+        
+        <mat-card-content>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <span class="label">Type:</span>
+              <span class="value">{{ getIntegrationTypeLabel() }}</span>
+            </div>
+            <div class="summary-item" *ngIf="getIntegrationEndpoint()">
+              <span class="label">Endpoint:</span>
+              <span class="value">{{ getIntegrationEndpoint() }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Timeout:</span>
+              <span class="value">{{ endpointForm.get('integration.timeout')?.value || 29000 }}ms</span>
+            </div>
+            <div class="summary-item" *ngIf="endpointForm.get('integration.useRequestMapping')?.value">
+              <span class="label">Request Mapping:</span>
+              <mat-icon class="enabled">check</mat-icon>
+            </div>
+            <div class="summary-item" *ngIf="endpointForm.get('integration.useResponseMapping')?.value">
+              <span class="label">Response Mapping:</span>
+              <mat-icon class="enabled">check</mat-icon>
+            </div>
+            <div class="summary-item" *ngIf="errorMappings.length > 0">
+              <span class="label">Error Mappings:</span>
+              <span class="value">{{ errorMappings.length }}</span>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </div>
+</mat-tab>

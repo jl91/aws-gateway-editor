@@ -1,0 +1,483 @@
+<!-- Enhanced Responses Tab -->
+<mat-tab label="Responses" [matBadge]="responses.length" matBadgeColor="accent">
+  <div class="tab-content">
+    
+    <!-- Responses Header -->
+    <div class="responses-header">
+      <div class="responses-actions">
+        <button mat-raised-button color="primary" [matMenuTriggerFor]="addResponseMenu" 
+                *ngIf="mode !== 'view'">
+          <mat-icon>add</mat-icon>
+          Add Response
+          <mat-icon>arrow_drop_down</mat-icon>
+        </button>
+        
+        <mat-menu #addResponseMenu="matMenu">
+          <mat-divider></mat-divider>
+          <span class="menu-section-title">Success Responses</span>
+          <button mat-menu-item (click)="addResponseWithTemplate('200', 'OK', 'success')">
+            <mat-icon class="success-icon">check_circle</mat-icon>
+            200 OK
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('201', 'Created', 'created')">
+            <mat-icon class="success-icon">add_circle</mat-icon>
+            201 Created
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('204', 'No Content', 'nocontent')">
+            <mat-icon class="success-icon">remove_circle</mat-icon>
+            204 No Content
+          </button>
+          
+          <mat-divider></mat-divider>
+          <span class="menu-section-title">Redirection</span>
+          <button mat-menu-item (click)="addResponseWithTemplate('301', 'Moved Permanently', 'redirect')">
+            <mat-icon class="redirect-icon">trending_flat</mat-icon>
+            301 Moved Permanently
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('302', 'Found', 'redirect')">
+            <mat-icon class="redirect-icon">call_made</mat-icon>
+            302 Found
+          </button>
+          
+          <mat-divider></mat-divider>
+          <span class="menu-section-title">Client Errors</span>
+          <button mat-menu-item (click)="addResponseWithTemplate('400', 'Bad Request', 'error')">
+            <mat-icon class="error-icon">error</mat-icon>
+            400 Bad Request
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('401', 'Unauthorized', 'unauthorized')">
+            <mat-icon class="error-icon">lock</mat-icon>
+            401 Unauthorized
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('403', 'Forbidden', 'forbidden')">
+            <mat-icon class="error-icon">block</mat-icon>
+            403 Forbidden
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('404', 'Not Found', 'notfound')">
+            <mat-icon class="error-icon">search_off</mat-icon>
+            404 Not Found
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('422', 'Unprocessable Entity', 'validation')">
+            <mat-icon class="error-icon">rule</mat-icon>
+            422 Validation Error
+          </button>
+          
+          <mat-divider></mat-divider>
+          <span class="menu-section-title">Server Errors</span>
+          <button mat-menu-item (click)="addResponseWithTemplate('500', 'Internal Server Error', 'server-error')">
+            <mat-icon class="error-icon">warning</mat-icon>
+            500 Internal Server Error
+          </button>
+          <button mat-menu-item (click)="addResponseWithTemplate('503', 'Service Unavailable', 'unavailable')">
+            <mat-icon class="error-icon">cloud_off</mat-icon>
+            503 Service Unavailable
+          </button>
+          
+          <mat-divider></mat-divider>
+          <button mat-menu-item (click)="addCustomResponse()">
+            <mat-icon>edit</mat-icon>
+            Custom Response Code
+          </button>
+        </mat-menu>
+        
+        <button mat-button (click)="addBulkResponses()" *ngIf="mode !== 'view'">
+          <mat-icon>library_add</mat-icon>
+          Add Common Set
+        </button>
+        
+        <button mat-button (click)="sortResponses()">
+          <mat-icon>sort</mat-icon>
+          Sort by Code
+        </button>
+      </div>
+      
+      <mat-form-field appearance="standard" class="response-filter">
+        <mat-label>Filter responses</mat-label>
+        <input matInput [(ngModel)]="responseFilter" [ngModelOptions]="{standalone: true}"
+               placeholder="Filter by code or description">
+        <mat-icon matPrefix>search</mat-icon>
+      </mat-form-field>
+    </div>
+    
+    <!-- Response Groups -->
+    <div class="response-groups">
+      
+      <!-- Success Responses (2xx) -->
+      <div class="response-group" *ngIf="getResponsesByCategory('2xx').length > 0">
+        <h4 class="group-title success">
+          <mat-icon>check_circle</mat-icon>
+          Success Responses (2xx)
+          <mat-chip>{{ getResponsesByCategory('2xx').length }}</mat-chip>
+        </h4>
+        
+        <div formArrayName="responses" class="responses-list">
+          <mat-expansion-panel *ngFor="let response of getFilteredResponses('2xx'); let i = index"
+                               [formGroupName]="getResponseIndex(response)" 
+                               class="response-panel success-response">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-chip class="status-code-chip success">
+                  {{ response.get('code')?.value }}
+                </mat-chip>
+                <span class="response-description">{{ response.get('description')?.value }}</span>
+              </mat-panel-title>
+              <mat-panel-description>
+                <mat-chip-listbox class="content-type-chips">
+                  <mat-chip *ngFor="let type of response.get('contentTypes')?.value">
+                    {{ type }}
+                  </mat-chip>
+                </mat-chip-listbox>
+              </mat-panel-description>
+            </mat-expansion-panel-header>
+            
+            <ng-container [formGroupName]="getResponseIndex(response)">
+              <div class="response-content">
+                <!-- Basic Information -->
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="quarter-width">
+                    <mat-label>Status Code</mat-label>
+                    <input matInput formControlName="code" type="text" 
+                           [class.invalid]="!isValidStatusCode(response.get('code')?.value)"
+                           placeholder="200">
+                    <mat-error *ngIf="!isValidStatusCode(response.get('code')?.value)">
+                      Invalid HTTP status code
+                    </mat-error>
+                  </mat-form-field>
+                  
+                  <mat-form-field appearance="outline" class="three-quarter-width">
+                    <mat-label>Description</mat-label>
+                    <input matInput formControlName="description" 
+                           placeholder="Successful response">
+                    <mat-hint>Brief description of this response</mat-hint>
+                  </mat-form-field>
+                </div>
+                
+                <!-- Content Types -->
+                <div class="content-types-section">
+                  <h5>Content Types</h5>
+                  <mat-chip-listbox formControlName="contentTypes" multiple>
+                    <mat-chip-option *ngFor="let type of availableContentTypes" [value]="type">
+                      {{ type }}
+                    </mat-chip-option>
+                  </mat-chip-listbox>
+                </div>
+                
+                <!-- Response Headers -->
+                <div class="response-headers-section">
+                  <div class="section-header">
+                    <h5>Response Headers</h5>
+                    <button mat-icon-button (click)="addResponseHeader(getResponseIndex(response))"
+                            *ngIf="mode !== 'view'">
+                      <mat-icon>add</mat-icon>
+                    </button>
+                  </div>
+                  
+                  <div formArrayName="headers" class="headers-list">
+                    <div *ngFor="let header of getResponseHeaders(getResponseIndex(response)).controls; let j = index"
+                         [formGroupName]="j" class="header-item">
+                      <mat-form-field appearance="outline" class="header-name">
+                        <mat-label>Header Name</mat-label>
+                        <input matInput formControlName="name" placeholder="X-Rate-Limit">
+                      </mat-form-field>
+                      
+                      <mat-form-field appearance="outline" class="header-value">
+                        <mat-label>Value/Schema</mat-label>
+                        <input matInput formControlName="schema" placeholder="integer">
+                      </mat-form-field>
+                      
+                      <mat-form-field appearance="outline" class="header-description">
+                        <mat-label>Description</mat-label>
+                        <input matInput formControlName="description">
+                      </mat-form-field>
+                      
+                      <mat-checkbox formControlName="required">Required</mat-checkbox>
+                      
+                      <button mat-icon-button color="warn" 
+                              (click)="removeResponseHeader(getResponseIndex(response), j)"
+                              *ngIf="mode !== 'view'">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Schema and Examples per Content Type -->
+                <mat-tab-group *ngIf="response.get('contentTypes')?.value?.length > 0">
+                  <mat-tab *ngFor="let contentType of response.get('contentTypes')?.value" 
+                           [label]="contentType">
+                    <div class="content-type-details">
+                      
+                      <!-- Schema Editor -->
+                      <div class="editor-section">
+                        <div class="editor-header">
+                          <h5>Response Schema</h5>
+                          <div class="editor-actions">
+                            <button mat-icon-button (click)="validateResponseSchema(getResponseIndex(response), contentType)"
+                                    matTooltip="Validate schema">
+                              <mat-icon>check_circle</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="formatResponseSchema(getResponseIndex(response), contentType)"
+                                    matTooltip="Format JSON">
+                              <mat-icon>format_align_left</mat-icon>
+                            </button>
+                            <button mat-icon-button [matMenuTriggerFor]="schemaTemplateMenu"
+                                    matTooltip="Use template">
+                              <mat-icon>inventory_2</mat-icon>
+                            </button>
+                            <mat-menu #schemaTemplateMenu="matMenu">
+                              <button mat-menu-item (click)="applyResponseTemplate(getResponseIndex(response), contentType, 'single')">
+                                <mat-icon>person</mat-icon>
+                                Single Item
+                              </button>
+                              <button mat-menu-item (click)="applyResponseTemplate(getResponseIndex(response), contentType, 'list')">
+                                <mat-icon>view_list</mat-icon>
+                                List/Array
+                              </button>
+                              <button mat-menu-item (click)="applyResponseTemplate(getResponseIndex(response), contentType, 'paginated')">
+                                <mat-icon>view_module</mat-icon>
+                                Paginated List
+                              </button>
+                              <button mat-menu-item (click)="applyResponseTemplate(getResponseIndex(response), contentType, 'error')">
+                                <mat-icon>error</mat-icon>
+                                Error Response
+                              </button>
+                              <button mat-menu-item (click)="applyResponseTemplate(getResponseIndex(response), contentType, 'empty')">
+                                <mat-icon>hourglass_empty</mat-icon>
+                                Empty Response
+                              </button>
+                            </mat-menu>
+                          </div>
+                        </div>
+                        
+                        <monaco-editor
+                          [value]="getResponseSchema(getResponseIndex(response), contentType)"
+                          (valueChange)="updateResponseSchema(getResponseIndex(response), contentType, $event)"
+                          [language]="contentType.includes('json') ? 'json' : contentType.includes('xml') ? 'xml' : 'plaintext'"
+                          [readOnly]="mode === 'view'"
+                          [options]="{
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            wordWrap: 'on',
+                            fontSize: 13
+                          }"
+                          style="height: 200px;">
+                        </monaco-editor>
+                      </div>
+                      
+                      <!-- Example Editor -->
+                      <div class="editor-section">
+                        <div class="editor-header">
+                          <h5>Response Example</h5>
+                          <div class="editor-actions">
+                            <button mat-icon-button (click)="generateResponseExample(getResponseIndex(response), contentType)"
+                                    matTooltip="Generate from schema">
+                              <mat-icon>auto_awesome</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="validateResponseExample(getResponseIndex(response), contentType)"
+                                    matTooltip="Validate against schema">
+                              <mat-icon>fact_check</mat-icon>
+                            </button>
+                            <button mat-icon-button (click)="formatResponseExample(getResponseIndex(response), contentType)"
+                                    matTooltip="Format">
+                              <mat-icon>format_align_left</mat-icon>
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <monaco-editor
+                          [value]="getResponseExample(getResponseIndex(response), contentType)"
+                          (valueChange)="updateResponseExample(getResponseIndex(response), contentType, $event)"
+                          [language]="contentType.includes('json') ? 'json' : contentType.includes('xml') ? 'xml' : 'plaintext'"
+                          [readOnly]="mode === 'view'"
+                          [options]="{
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            wordWrap: 'on',
+                            fontSize: 13
+                          }"
+                          style="height: 150px;">
+                        </monaco-editor>
+                      </div>
+                    </div>
+                  </mat-tab>
+                </mat-tab-group>
+                
+                <!-- Links (HATEOAS) -->
+                <div class="response-links-section" *ngIf="response.get('code')?.value?.startsWith('2')">
+                  <div class="section-header">
+                    <h5>Links (HATEOAS)</h5>
+                    <button mat-icon-button (click)="addResponseLink(getResponseIndex(response))"
+                            *ngIf="mode !== 'view'">
+                      <mat-icon>add</mat-icon>
+                    </button>
+                  </div>
+                  
+                  <div formArrayName="links" class="links-list">
+                    <div *ngFor="let link of getResponseLinks(getResponseIndex(response)).controls; let k = index"
+                         [formGroupName]="k" class="link-item">
+                      <mat-form-field appearance="outline" class="link-rel">
+                        <mat-label>Relation</mat-label>
+                        <input matInput formControlName="rel" placeholder="self, next, prev">
+                      </mat-form-field>
+                      
+                      <mat-form-field appearance="outline" class="link-href">
+                        <mat-label>Operation ID</mat-label>
+                        <mat-select formControlName="operationId">
+                          <mat-option *ngFor="let op of availableOperationIds" [value]="op">
+                            {{ op }}
+                          </mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                      
+                      <mat-form-field appearance="outline" class="link-description">
+                        <mat-label>Description</mat-label>
+                        <input matInput formControlName="description">
+                      </mat-form-field>
+                      
+                      <button mat-icon-button color="warn" 
+                              (click)="removeResponseLink(getResponseIndex(response), k)"
+                              *ngIf="mode !== 'view'">
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Remove Response Button -->
+                <button mat-button color="warn" (click)="removeResponse(getResponseIndex(response))"
+                        *ngIf="mode !== 'view' && responses.length > 1" class="remove-response-button">
+                  <mat-icon>delete</mat-icon>
+                  Remove Response
+                </button>
+              </div>
+            </ng-container>
+          </mat-expansion-panel>
+        </div>
+      </div>
+      
+      <!-- Client Error Responses (4xx) -->
+      <div class="response-group" *ngIf="getResponsesByCategory('4xx').length > 0">
+        <h4 class="group-title error">
+          <mat-icon>error</mat-icon>
+          Client Error Responses (4xx)
+          <mat-chip>{{ getResponsesByCategory('4xx').length }}</mat-chip>
+        </h4>
+        
+        <div formArrayName="responses" class="responses-list">
+          <mat-expansion-panel *ngFor="let response of getFilteredResponses('4xx'); let i = index"
+                               [formGroupName]="getResponseIndex(response)" 
+                               class="response-panel error-response">
+            <!-- Same structure as success responses but with error styling -->
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-chip class="status-code-chip error">
+                  {{ response.get('code')?.value }}
+                </mat-chip>
+                <span class="response-description">{{ response.get('description')?.value }}</span>
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            <!-- Content similar to 2xx responses -->
+          </mat-expansion-panel>
+        </div>
+      </div>
+      
+      <!-- Server Error Responses (5xx) -->
+      <div class="response-group" *ngIf="getResponsesByCategory('5xx').length > 0">
+        <h4 class="group-title server-error">
+          <mat-icon>warning</mat-icon>
+          Server Error Responses (5xx)
+          <mat-chip>{{ getResponsesByCategory('5xx').length }}</mat-chip>
+        </h4>
+        
+        <div formArrayName="responses" class="responses-list">
+          <mat-expansion-panel *ngFor="let response of getFilteredResponses('5xx'); let i = index"
+                               [formGroupName]="getResponseIndex(response)" 
+                               class="response-panel server-error-response">
+            <!-- Same structure as success responses but with server error styling -->
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-chip class="status-code-chip server-error">
+                  {{ response.get('code')?.value }}
+                </mat-chip>
+                <span class="response-description">{{ response.get('description')?.value }}</span>
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            <!-- Content similar to 2xx responses -->
+          </mat-expansion-panel>
+        </div>
+      </div>
+      
+      <!-- Other Responses -->
+      <div class="response-group" *ngIf="getResponsesByCategory('other').length > 0">
+        <h4 class="group-title other">
+          <mat-icon>more_horiz</mat-icon>
+          Other Responses
+          <mat-chip>{{ getResponsesByCategory('other').length }}</mat-chip>
+        </h4>
+        
+        <div formArrayName="responses" class="responses-list">
+          <mat-expansion-panel *ngFor="let response of getFilteredResponses('other'); let i = index"
+                               [formGroupName]="getResponseIndex(response)" 
+                               class="response-panel other-response">
+            <!-- Same structure as success responses -->
+          </mat-expansion-panel>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="responses.length === 0">
+      <mat-icon>inbox</mat-icon>
+      <p>No responses defined</p>
+      <p class="hint">Add at least one response to define the endpoint output</p>
+      <button mat-raised-button color="primary" (click)="addResponseWithTemplate('200', 'OK', 'success')"
+              *ngIf="mode !== 'view'">
+        <mat-icon>add</mat-icon>
+        Add Success Response
+      </button>
+    </div>
+    
+    <!-- Response Statistics -->
+    <div class="response-stats" *ngIf="responses.length > 0">
+      <mat-card>
+        <mat-card-content>
+          <h5>Response Coverage</h5>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <mat-icon class="success-icon">check_circle</mat-icon>
+              <span class="stat-label">Success</span>
+              <span class="stat-value">{{ getResponsesByCategory('2xx').length }}</span>
+            </div>
+            <div class="stat-item">
+              <mat-icon class="redirect-icon">trending_flat</mat-icon>
+              <span class="stat-label">Redirect</span>
+              <span class="stat-value">{{ getResponsesByCategory('3xx').length }}</span>
+            </div>
+            <div class="stat-item">
+              <mat-icon class="error-icon">error</mat-icon>
+              <span class="stat-label">Client Error</span>
+              <span class="stat-value">{{ getResponsesByCategory('4xx').length }}</span>
+            </div>
+            <div class="stat-item">
+              <mat-icon class="error-icon">warning</mat-icon>
+              <span class="stat-label">Server Error</span>
+              <span class="stat-value">{{ getResponsesByCategory('5xx').length }}</span>
+            </div>
+          </div>
+          
+          <mat-divider></mat-divider>
+          
+          <div class="recommendations" *ngIf="getResponseRecommendations().length > 0">
+            <h5>Recommendations</h5>
+            <mat-list>
+              <mat-list-item *ngFor="let rec of getResponseRecommendations()">
+                <mat-icon matListItemIcon>lightbulb</mat-icon>
+                <span matListItemTitle>{{ rec }}</span>
+              </mat-list-item>
+            </mat-list>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  </div>
+</mat-tab>

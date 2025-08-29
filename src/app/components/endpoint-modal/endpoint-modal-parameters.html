@@ -1,0 +1,345 @@
+<!-- This is a partial template for the Parameters tab -->
+<!-- Complete replacement for the Parameters tab content -->
+
+<mat-tab label="Parameters" [matBadge]="parameters.length" matBadgeColor="primary" 
+         [matBadgeHidden]="parameters.length === 0">
+  <div class="tab-content">
+    <div class="parameters-header">
+      <div class="auto-detect-section" *ngIf="mode !== 'view'">
+        <button mat-stroked-button (click)="autoDetectPathParameters()" 
+                [disabled]="!endpointForm.get('path')?.value">
+          <mat-icon>auto_fix_high</mat-icon>
+          Auto-detect Path Parameters
+        </button>
+        <mat-hint *ngIf="detectedPathParams.length > 0" class="detected-hint">
+          Detected: {{ detectedPathParams.join(', ') }}
+        </mat-hint>
+      </div>
+      
+      <div class="add-parameter-buttons" *ngIf="mode !== 'view'">
+        <button mat-button [matMenuTriggerFor]="addParamMenu" color="primary">
+          <mat-icon>add</mat-icon>
+          Add Parameter
+          <mat-icon>arrow_drop_down</mat-icon>
+        </button>
+        <mat-menu #addParamMenu="matMenu">
+          <button mat-menu-item (click)="addParameter('path')">
+            <mat-icon>route</mat-icon>
+            Path Parameter
+          </button>
+          <button mat-menu-item (click)="addParameter('query')">
+            <mat-icon>help_outline</mat-icon>
+            Query Parameter
+          </button>
+          <button mat-menu-item (click)="addParameter('header')">
+            <mat-icon>dns</mat-icon>
+            Header Parameter
+          </button>
+          <button mat-menu-item (click)="addParameter('cookie')">
+            <mat-icon>cookie</mat-icon>
+            Cookie Parameter
+          </button>
+        </mat-menu>
+        
+        <button mat-button (click)="importParametersFromSchema()" *ngIf="mode !== 'view'">
+          <mat-icon>upload_file</mat-icon>
+          Import from Schema
+        </button>
+      </div>
+    </div>
+
+    <div formArrayName="parameters">
+      <!-- Path Parameters Section -->
+      <div class="parameter-section" *ngIf="getParametersByType('path').length > 0">
+        <h4 class="section-title">
+          <mat-icon>route</mat-icon>
+          Path Parameters
+          <mat-chip>{{ getParametersByType('path').length }}</mat-chip>
+        </h4>
+        
+        <div class="parameters-list">
+          <ng-container *ngFor="let param of parameters.controls; let i = index">
+            <mat-expansion-panel *ngIf="param.get('in')?.value === 'path'"
+                                  [formGroupName]="i" class="parameter-panel path-param">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="param-name">{{ param.get('name')?.value || 'New Parameter' }}</span>
+                  <mat-chip class="required-chip">Required</mat-chip>
+                </mat-panel-title>
+                <mat-panel-description>
+                  <mat-chip class="type-chip">{{ param.get('schema')?.value?.type || 'string' }}</mat-chip>
+                  <span class="param-description">{{ param.get('description')?.value || 'No description' }}</span>
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <ng-container [formGroup]="param">
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Name <span class="required-marker">*</span></mat-label>
+                    <input matInput formControlName="name" placeholder="parameterName"
+                           (blur)="validateParameterName(i)">
+                    <mat-hint>Must match path parameter in URL</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="quarter-width">
+                    <mat-label>Type</mat-label>
+                    <mat-select formControlName="type">
+                      <mat-option *ngFor="let type of parameterTypes" [value]="type">
+                        {{ type }}
+                      </mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  
+                  <mat-form-field appearance="outline" class="quarter-width">
+                    <mat-label>Format</mat-label>
+                    <mat-select formControlName="format">
+                      <mat-option value="">None</mat-option>
+                      <mat-option value="int32">int32</mat-option>
+                      <mat-option value="int64">int64</mat-option>
+                      <mat-option value="float">float</mat-option>
+                      <mat-option value="double">double</mat-option>
+                      <mat-option value="uuid">UUID</mat-option>
+                      <mat-option value="date">Date</mat-option>
+                      <mat-option value="date-time">DateTime</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Description</mat-label>
+                  <textarea matInput formControlName="description" rows="2"
+                            placeholder="Describe what this parameter is for"></textarea>
+                </mat-form-field>
+
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Example Value</mat-label>
+                    <input matInput formControlName="example" placeholder="e.g., 123 or 'abc'">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Default Value</mat-label>
+                    <input matInput formControlName="default">
+                  </mat-form-field>
+                </div>
+
+                <div class="schema-editor" *ngIf="param.get('type')?.value === 'array' || param.get('type')?.value === 'object'">
+                  <h5>Schema Definition</h5>
+                  <monaco-editor
+                    [value]="param.get('schema')?.value | json"
+                    (valueChange)="updateParameterSchema(i, $event)"
+                    [language]="'json'"
+                    [readOnly]="mode === 'view'"
+                    style="height: 150px;">
+                  </monaco-editor>
+                </div>
+
+                <mat-checkbox formControlName="required" [disabled]="true">
+                  Required (Path parameters are always required)
+                </mat-checkbox>
+
+                <button mat-icon-button color="warn" (click)="removeParameter(i)"
+                        *ngIf="mode !== 'view'" class="remove-button"
+                        matTooltip="Remove parameter">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </ng-container>
+            </mat-expansion-panel>
+          </ng-container>
+        </div>
+      </div>
+
+      <!-- Query Parameters Section -->
+      <div class="parameter-section" *ngIf="getParametersByType('query').length > 0">
+        <h4 class="section-title">
+          <mat-icon>help_outline</mat-icon>
+          Query Parameters
+          <mat-chip>{{ getParametersByType('query').length }}</mat-chip>
+        </h4>
+        
+        <div class="parameters-list">
+          <ng-container *ngFor="let param of parameters.controls; let i = index">
+            <mat-expansion-panel *ngIf="param.get('in')?.value === 'query'"
+                                  [formGroupName]="i" class="parameter-panel query-param">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="param-name">{{ param.get('name')?.value || 'New Parameter' }}</span>
+                  <mat-chip class="required-chip" *ngIf="param.get('required')?.value">Required</mat-chip>
+                </mat-panel-title>
+                <mat-panel-description>
+                  <mat-chip class="type-chip">{{ param.get('schema')?.value?.type || 'string' }}</mat-chip>
+                  <span class="param-description">{{ param.get('description')?.value || 'No description' }}</span>
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <ng-container [formGroup]="param">
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Name <span class="required-marker">*</span></mat-label>
+                    <input matInput formControlName="name" placeholder="parameterName">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="quarter-width">
+                    <mat-label>Type</mat-label>
+                    <mat-select formControlName="type">
+                      <mat-option *ngFor="let type of parameterTypes" [value]="type">
+                        {{ type }}
+                      </mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  
+                  <mat-checkbox formControlName="required" class="quarter-width">
+                    Required
+                  </mat-checkbox>
+                </div>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Description</mat-label>
+                  <textarea matInput formControlName="description" rows="2"></textarea>
+                </mat-form-field>
+
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="third-width">
+                    <mat-label>Example Value</mat-label>
+                    <input matInput formControlName="example">
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" class="third-width">
+                    <mat-label>Default Value</mat-label>
+                    <input matInput formControlName="default">
+                  </mat-form-field>
+                  
+                  <mat-checkbox formControlName="allowEmptyValue" class="third-width">
+                    Allow Empty Value
+                  </mat-checkbox>
+                </div>
+
+                <button mat-icon-button color="warn" (click)="removeParameter(i)"
+                        *ngIf="mode !== 'view'" class="remove-button">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </ng-container>
+            </mat-expansion-panel>
+          </ng-container>
+        </div>
+      </div>
+
+      <!-- Header Parameters Section -->
+      <div class="parameter-section" *ngIf="getParametersByType('header').length > 0">
+        <h4 class="section-title">
+          <mat-icon>dns</mat-icon>
+          Header Parameters
+          <mat-chip>{{ getParametersByType('header').length }}</mat-chip>
+        </h4>
+        
+        <div class="parameters-list">
+          <ng-container *ngFor="let param of parameters.controls; let i = index">
+            <mat-expansion-panel *ngIf="param.get('in')?.value === 'header'"
+                                  [formGroupName]="i" class="parameter-panel header-param">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="param-name">{{ param.get('name')?.value || 'New Parameter' }}</span>
+                  <mat-chip class="required-chip" *ngIf="param.get('required')?.value">Required</mat-chip>
+                </mat-panel-title>
+                <mat-panel-description>
+                  <mat-chip class="type-chip">{{ param.get('schema')?.value?.type || 'string' }}</mat-chip>
+                  <span class="param-description">{{ param.get('description')?.value || 'No description' }}</span>
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <ng-container [formGroup]="param">
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Header Name <span class="required-marker">*</span></mat-label>
+                    <input matInput formControlName="name" placeholder="X-Custom-Header">
+                    <mat-hint>Standard or custom header name</mat-hint>
+                  </mat-form-field>
+
+                  <mat-checkbox formControlName="required" class="half-width">
+                    Required
+                  </mat-checkbox>
+                </div>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Description</mat-label>
+                  <textarea matInput formControlName="description" rows="2"></textarea>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Example Value</mat-label>
+                  <input matInput formControlName="example" placeholder="Bearer token123">
+                </mat-form-field>
+
+                <button mat-icon-button color="warn" (click)="removeParameter(i)"
+                        *ngIf="mode !== 'view'" class="remove-button">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </ng-container>
+            </mat-expansion-panel>
+          </ng-container>
+        </div>
+      </div>
+
+      <!-- Cookie Parameters Section -->
+      <div class="parameter-section" *ngIf="getParametersByType('cookie').length > 0">
+        <h4 class="section-title">
+          <mat-icon>cookie</mat-icon>
+          Cookie Parameters
+          <mat-chip>{{ getParametersByType('cookie').length }}</mat-chip>
+        </h4>
+        
+        <div class="parameters-list">
+          <ng-container *ngFor="let param of parameters.controls; let i = index">
+            <mat-expansion-panel *ngIf="param.get('in')?.value === 'cookie'"
+                                  [formGroupName]="i" class="parameter-panel cookie-param">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <span class="param-name">{{ param.get('name')?.value || 'New Parameter' }}</span>
+                  <mat-chip class="required-chip" *ngIf="param.get('required')?.value">Required</mat-chip>
+                </mat-panel-title>
+                <mat-panel-description>
+                  <span class="param-description">{{ param.get('description')?.value || 'No description' }}</span>
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <ng-container [formGroup]="param">
+                <div class="form-row">
+                  <mat-form-field appearance="outline" class="half-width">
+                    <mat-label>Cookie Name <span class="required-marker">*</span></mat-label>
+                    <input matInput formControlName="name" placeholder="sessionId">
+                  </mat-form-field>
+
+                  <mat-checkbox formControlName="required" class="half-width">
+                    Required
+                  </mat-checkbox>
+                </div>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Description</mat-label>
+                  <textarea matInput formControlName="description" rows="2"></textarea>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Example Value</mat-label>
+                  <input matInput formControlName="example">
+                </mat-form-field>
+
+                <button mat-icon-button color="warn" (click)="removeParameter(i)"
+                        *ngIf="mode !== 'view'" class="remove-button">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </ng-container>
+            </mat-expansion-panel>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" *ngIf="parameters.length === 0">
+      <mat-icon>inbox</mat-icon>
+      <p>No parameters defined</p>
+      <p class="hint">Parameters allow your API to accept input data</p>
+    </div>
+  </div>
+</mat-tab>

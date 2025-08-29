@@ -1,0 +1,157 @@
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  position: relative;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  
+  .loading-text {
+    margin-top: 20px;
+    color: #666;
+    font-size: 16px;
+  }
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+
+  .header-content {
+    flex: 1;
+    text-align: center;
+  }
+
+  .error-log-button-top {
+    position: relative;
+    top: 8px;
+
+    mat-icon {
+      color: #666;
+      transition: color 0.3s;
+
+      &.has-errors {
+        color: #f44336;
+        animation: pulse 2s infinite;
+      }
+    }
+
+    &:hover mat-icon {
+      color: #333;
+    }
+  }
+}
+
+.title {
+  text-align: center;
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 40px;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  margin-bottom: 60px;
+}
+
+.option-card {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  
+  &:hover:not(.disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+  }
+  
+  &.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+}
+
+.card-content {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.large-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+  color: #1976d2;
+  margin: 0 auto 16px;
+}
+
+.recent-section {
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .error-log-button {
+      mat-icon {
+        color: #666;
+        transition: color 0.3s;
+
+        &.has-errors {
+          color: #f44336;
+          animation: pulse 2s infinite;
+        }
+      }
+
+      &:hover mat-icon {
+        color: #333;
+      }
+    }
+  }
+  
+  mat-list-item {
+    cursor: pointer;
+    
+    &:hover {
+      background-color: #f5f5f5;
+    }
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}

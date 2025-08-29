@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Production
+dist/
+build/
+out/
+
+# Angular
+.angular/
+src/**/*.js
+src/**/*.js.map
+!src/karma.conf.js
+
+# Electron
+electron-builder.yml
+
+# IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output
+*.lcov
+.coverage
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Build artifacts
+*.tsbuildinfo
+
+# Debug
+.chrome/
+.firefox/
+
+# Documentation
+docs/generated/
+
+# Installers
+installers/
+release/

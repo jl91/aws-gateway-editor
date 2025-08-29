@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: Test API Gateway
+  description: Sample API Gateway for testing the AWS API Gateway Editor
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api@example.com
+    url: https://api.example.com/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  x-logo:
+    url: https://api.example.com/logo.png
+    altText: API Logo
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://staging-api.example.com/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development server
+tags:
+  - name: Users
+    description: User management operations
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List all users
+      description: Returns a paginated list of all users in the system
+      tags:
+        - Users
+      parameters:
+        - &ref_6
+          name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - &ref_7
+          name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items: &ref_1
+                      type: object
+                      required:
+                        - id
+                        - email
+                        - name
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        email:
+                          type: string
+                          format: email
+                        name:
+                          type: string
+                          minLength: 1
+                          maxLength: 100
+                        role:
+                          type: string
+                          enum:
+                            - admin
+                            - user
+                            - guest
+                        status:
+                          type: string
+                          enum:
+                            - active
+                            - inactive
+                            - suspended
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                        metadata:
+                          type: object
+                          additionalProperties: true
+                  pagination: &ref_4
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+        "400": &ref_2
+          description: Bad request
+          content:
+            application/json:
+              schema: &ref_0
+                type: object
+                required:
+                  - code
+                  - message
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: object
+                    additionalProperties: true
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                code: BAD_REQUEST
+                message: Invalid request parameters
+        "401": &ref_5
+          description: Authentication required
+          content:
+            application/json:
+              schema: *ref_0
+              example:
+                code: UNAUTHORIZED
+                message: Please authenticate to access this resource
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: https://backend.example.com/users
+        passthroughBehavior: when_no_match
+    post:
+      operationId: createUser
+      summary: Create a new user
+      description: Creates a new user account in the system
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: &ref_3
+              type: object
+              required:
+                - email
+                - name
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                role:
+                  type: string
+                  enum:
+                    - admin
+                    - user
+                    - guest
+                  default: user
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema: *ref_1
+        "400": *ref_2
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema: *ref_0
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789:function:createUser/invocations
+  /teste2/:
+    get:
+      operationId: get-test-2
+      summary: ""
+      description: ""
+      tags: []
+      parameters: []
+      responses:
+        "200":
+          description: Success
+      x-amazon-apigateway-logging:
+        level: "OFF"
+        dataTrace: false
+        metricsEnabled: false
+        customMetrics: []
+components:
+  schemas:
+    User: *ref_1
+    CreateUserRequest: *ref_3
+    Pagination: *ref_4
+    Error: *ref_0
+  responses:
+    BadRequest: *ref_2
+    Unauthorized: *ref_5
+  parameters:
+    PageParam: *ref_6
+    LimitParam: *ref_7
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for accessing the service
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for user authentication

@@ -1,0 +1,72 @@
+<div class="home-container">
+  <div class="loading-overlay" *ngIf="isLoading">
+    <mat-spinner diameter="50"></mat-spinner>
+    <p class="loading-text">{{ loadingMessage }}</p>
+  </div>
+
+  <div class="header-container">
+    <div class="header-content">
+      <h1 class="title">Welcome to AWS API Gateway Editor</h1>
+      <p class="subtitle">Select an option to get started</p>
+    </div>
+    <button mat-icon-button 
+            (click)="openErrorLogs()" 
+            [matBadge]="errorCount > 0 ? errorCount : ''"
+            [matBadgeHidden]="errorCount === 0"
+            matBadgeColor="warn"
+            matBadgeSize="small"
+            matTooltip="View error logs"
+            class="error-log-button-top">
+      <mat-icon [class.has-errors]="errorCount > 0">bug_report</mat-icon>
+    </button>
+  </div>
+
+  <div class="options-grid">
+    <mat-card class="option-card" (click)="openLocalFolder()" @cardAnimation [class.disabled]="isLoading">
+      <mat-card-content class="card-content">
+        <mat-icon class="large-icon">folder_open</mat-icon>
+        <h2>Open Local Folder</h2>
+        <p>Browse and open an existing OpenAPI specification from your computer</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="option-card" (click)="connectGitHub()" @cardAnimation [class.disabled]="isLoading">
+      <mat-card-content class="card-content">
+        <mat-icon class="large-icon">code</mat-icon>
+        <h2>Connect GitHub</h2>
+        <p>Connect to a GitHub repository and edit OpenAPI specifications</p>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="option-card" (click)="createNewGateway()" @cardAnimation [class.disabled]="isLoading">
+      <mat-card-content class="card-content">
+        <mat-icon class="large-icon">add_circle</mat-icon>
+        <h2>Create New Gateway</h2>
+        <p>Start from scratch with a new OpenAPI specification</p>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="recent-section" *ngIf="recentProjects.length > 0 && !isLoading" @listAnimation>
+    <div class="section-header">
+      <h2>Recent Projects</h2>
+      <button mat-icon-button 
+              (click)="openErrorLogs()" 
+              [matBadge]="errorCount > 0 ? errorCount : ''"
+              [matBadgeHidden]="errorCount === 0"
+              matBadgeColor="warn"
+              matBadgeSize="small"
+              matTooltip="View error logs"
+              class="error-log-button">
+        <mat-icon [class.has-errors]="errorCount > 0">bug_report</mat-icon>
+      </button>
+    </div>
+    <mat-list>
+      <mat-list-item *ngFor="let project of recentProjects" (click)="openRecentProject(project)">
+        <mat-icon matListItemIcon>history</mat-icon>
+        <div matListItemTitle>{{ project.name }}</div>
+        <div matListItemLine>{{ project.path }}</div>
+      </mat-list-item>
+    </mat-list>
+  </div>
+</div>

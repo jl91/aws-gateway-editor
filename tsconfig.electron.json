@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/electron",
+    "module": "commonjs",
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": [
+    "src/electron/**/*.ts",
+    "src/electron/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/app/**/*",
+    "tests/**/*"
+  ]
+}

@@ -1,0 +1,203 @@
+<div class="preview-dialog" [class.fullscreen]="isFullscreen">
+  <mat-dialog-content>
+    <div class="preview-header">
+      <div class="endpoint-info">
+        <span class="method-badge" [ngClass]="data.endpoint.method.toLowerCase()">
+          {{ data.endpoint.method }}
+        </span>
+        <span class="endpoint-path">{{ data.endpoint.path }}</span>
+        <span class="endpoint-id">({{ data.endpoint.id }})</span>
+      </div>
+      
+      <div class="header-actions">
+        <button mat-icon-button 
+                [disabled]="!canNavigatePrevious"
+                (click)="navigatePrevious()"
+                matTooltip="Previous endpoint">
+          <mat-icon>chevron_left</mat-icon>
+        </button>
+        
+        <span class="navigation-info" *ngIf="data.allEndpoints">
+          {{ (data.currentIndex || 0) + 1 }} / {{ data.allEndpoints.length }}
+        </span>
+        
+        <button mat-icon-button 
+                [disabled]="!canNavigateNext"
+                (click)="navigateNext()"
+                matTooltip="Next endpoint">
+          <mat-icon>chevron_right</mat-icon>
+        </button>
+        
+        <mat-button-toggle-group [(value)]="format" (change)="updateSpecDisplay()">
+          <mat-button-toggle value="json" matTooltip="JSON format">
+            JSON
+          </mat-button-toggle>
+          <mat-button-toggle value="yaml" matTooltip="YAML format">
+            YAML
+          </mat-button-toggle>
+        </mat-button-toggle-group>
+        
+        <button mat-icon-button (click)="copyToClipboard()" matTooltip="Copy to clipboard">
+          <mat-icon>content_copy</mat-icon>
+        </button>
+        
+        <button mat-icon-button (click)="exportEndpoint()" matTooltip="Export endpoint">
+          <mat-icon>download</mat-icon>
+        </button>
+        
+        <button mat-icon-button (click)="toggleFullscreen()" 
+                [matTooltip]="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+          <mat-icon>{{ isFullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+        </button>
+        
+        <button mat-icon-button [matMenuTriggerFor]="exportMenu" matTooltip="Export options">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        
+        <mat-menu #exportMenu="matMenu">
+          <button mat-menu-item (click)="exportAsPostman()">
+            <mat-icon>cloud_download</mat-icon>
+            Export as Postman Collection
+          </button>
+          <button mat-menu-item (click)="exportAsInsomnia()">
+            <mat-icon>cloud_download</mat-icon>
+            Export as Insomnia Collection
+          </button>
+        </mat-menu>
+      </div>
+    </div>
+    
+    <mat-tab-group>
+      <mat-tab label="OpenAPI Spec">
+        <div class="tab-content">
+          <monaco-editor
+            [value]="openApiSpec"
+            [language]="format"
+            [readOnly]="true"
+            [options]="{
+              minimap: { enabled: !isFullscreen },
+              scrollBeyondLastLine: false,
+              wordWrap: 'on',
+              fontSize: 14
+            }"
+            [style.height]="isFullscreen ? 'calc(100vh - 250px)' : '500px'">
+          </monaco-editor>
+        </div>
+      </mat-tab>
+      
+      <mat-tab label="Code Examples">
+        <div class="tab-content">
+          <div class="example-header">
+            <mat-form-field appearance="outline" class="language-selector">
+              <mat-label>Language</mat-label>
+              <mat-select [(value)]="selectedLanguage" (selectionChange)="onLanguageChange($event.value)">
+                <mat-option *ngFor="let lang of languages" [value]="lang.id">
+                  {{ lang.name }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="base-url-field">
+              <mat-label>Base URL</mat-label>
+              <input matInput [(ngModel)]="baseUrl" (ngModelChange)="generateAllExamples()">
+            </mat-form-field>
+            
+            <button mat-button color="primary" (click)="copyToClipboard(codeExamples[selectedLanguage])">
+              <mat-icon>content_copy</mat-icon>
+              Copy Code
+            </button>
+          </div>
+          
+          <div class="code-example">
+            <monaco-editor
+              [value]="codeExamples[selectedLanguage]"
+              [language]="selectedLanguage === 'curl' ? 'shell' : 
+                         selectedLanguage === 'csharp' ? 'csharp' :
+                         selectedLanguage === 'typescript' ? 'typescript' :
+                         selectedLanguage"
+              [readOnly]="true"
+              [options]="{
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                fontSize: 14
+              }"
+              [style.height]="isFullscreen ? 'calc(100vh - 350px)' : '400px'">
+            </monaco-editor>
+          </div>
+        </div>
+      </mat-tab>
+      
+      <mat-tab label="Response Examples" *ngIf="data.endpoint.responses">
+        <div class="tab-content">
+          <div class="responses-list">
+            <div class="response-item" *ngFor="let response of getResponses()">
+              <div class="response-header">
+                <span class="status-code" [class.success]="response.code.startsWith('2')"
+                      [class.error]="response.code.startsWith('4') || response.code.startsWith('5')">
+                  {{ response.code }}
+                </span>
+                <span class="response-description">{{ response.description }}</span>
+                <button mat-icon-button (click)="copyToClipboard(formatResponse(response))"
+                        matTooltip="Copy response">
+                  <mat-icon>content_copy</mat-icon>
+                </button>
+              </div>
+              
+              <div class="response-content" *ngIf="response.content">
+                <monaco-editor
+                  [value]="formatResponse(response)"
+                  [language]="'json'"
+                  [readOnly]="true"
+                  [options]="{
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    fontSize: 13,
+                    lineNumbers: 'off'
+                  }"
+                  style="height: 200px; margin-top: 12px;">
+                </monaco-editor>
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+      
+      <mat-tab label="Description" *ngIf="data.endpoint.description">
+        <div class="tab-content">
+          <div class="description-content">
+            <h3>Summary</h3>
+            <p>{{ data.endpoint.summary }}</p>
+            
+            <h3>Description</h3>
+            <p class="description-text">{{ data.endpoint.description }}</p>
+            
+            <div class="metadata">
+              <div class="metadata-item" *ngIf="data.endpoint.tags && data.endpoint.tags.length > 0">
+                <strong>Tags:</strong>
+                <mat-chip-set>
+                  <mat-chip *ngFor="let tag of data.endpoint.tags">{{ tag }}</mat-chip>
+                </mat-chip-set>
+              </div>
+              
+              <div class="metadata-item" *ngIf="data.endpoint.deprecated">
+                <mat-icon class="deprecated-icon">warning</mat-icon>
+                <strong>This endpoint is deprecated</strong>
+              </div>
+              
+              <div class="metadata-item" *ngIf="data.endpoint.security">
+                <strong>Security:</strong>
+                <span>{{ formatSecurity(data.endpoint.security) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </mat-dialog-content>
+  
+  <mat-dialog-actions align="end">
+    <button mat-button (click)="dialogRef.close()">Close</button>
+  </mat-dialog-actions>
+</div>

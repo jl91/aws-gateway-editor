@@ -1,0 +1,1811 @@
+<h2 mat-dialog-title>
+  <div class="dialog-title">
+    <span *ngIf="mode === 'create'">Create New Endpoint</span>
+    <span *ngIf="mode === 'edit'">Edit Endpoint</span>
+    <span *ngIf="mode === 'view'">View Endpoint</span>
+    <span class="unsaved-indicator" *ngIf="hasUnsavedChanges && mode !== 'view'">•</span>
+  </div>
+  <div class="dialog-actions" *ngIf="mode !== 'view'">
+    <button mat-icon-button (click)="undo()" [disabled]="!canUndo()" 
+            matTooltip="Undo (Ctrl+Z)">
+      <mat-icon>undo</mat-icon>
+    </button>
+    <button mat-icon-button (click)="redo()" [disabled]="!canRedo()" 
+            matTooltip="Redo (Ctrl+Shift+Z)">
+      <mat-icon>redo</mat-icon>
+    </button>
+  </div>
+</h2>
+
+<mat-dialog-content>
+  <form [formGroup]="endpointForm">
+    <mat-tab-group animationDuration="0ms">
+      <!-- Basic Information Tab -->
+      <mat-tab label="Basic">
+        <div class="tab-content">
+          <div class="form-row">
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>Operation ID <span class="required-marker">*</span></mat-label>
+              <input matInput formControlName="id" placeholder="getUserById">
+              <mat-error *ngIf="endpointForm.get('id')?.hasError('required')">
+                Operation ID is required
+              </mat-error>
+              <mat-error *ngIf="endpointForm.get('id')?.hasError('pattern')">
+                Only letters, numbers, underscore and dash allowed
+              </mat-error>
+              <mat-error *ngIf="hasValidationError('id')">
+                {{ getValidationError('id') }}
+              </mat-error>
+              <mat-hint *ngIf="!hasValidationError('id') && !endpointForm.get('id')?.errors">
+                Unique identifier for this operation
+              </mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="half-width">
+              <mat-label>HTTP Method</mat-label>
+              <mat-select formControlName="method">
+                <mat-option *ngFor="let method of methods" [value]="method">
+                  <span class="method-badge" [ngClass]="method.toLowerCase()">{{ method }}</span>
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Path <span class="required-marker">*</span></mat-label>
+            <input matInput formControlName="path" placeholder="/users/{id}">
+            <mat-error *ngIf="endpointForm.get('path')?.hasError('required')">
+              Path is required
+            </mat-error>
+            <mat-error *ngIf="endpointForm.get('path')?.hasError('pattern')">
+              Path must start with /
+            </mat-error>
+            <mat-error *ngIf="hasValidationError('path')">
+              {{ getValidationError('path') }}
+            </mat-error>
+            <mat-hint *ngIf="!hasValidationError('path') && !endpointForm.get('path')?.errors">
+              Use {{ '{' }}param{{ '}' }} for path parameters
+            </mat-hint>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Summary</mat-label>
+            <input matInput formControlName="summary" placeholder="Brief description of the endpoint"
+                   #summaryInput maxlength="120">
+            <mat-error *ngIf="hasValidationError('summary')">
+              {{ getValidationError('summary') }}
+            </mat-error>
+            <mat-hint align="end">{{ summaryInput.value?.length || 0 }}/120</mat-hint>
+          </mat-form-field>
+
+          <div class="form-field-wrapper full-width">
+            <label class="field-label">Description</label>
+            <app-rich-text-editor 
+              formControlName="description"
+              placeholder="Detailed description of what this endpoint does"
+              [readonly]="mode === 'view'">
+            </app-rich-text-editor>
+          </div>
+
+          <div class="tags-section">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Tags</mat-label>
+              <mat-chip-grid #chipGrid>
+                <mat-chip-row *ngFor="let tag of currentTags" 
+                              (removed)="removeTag(tag)"
+                              [removable]="mode !== 'view'">
+                  {{ tag }}
+                  <mat-icon matChipRemove *ngIf="mode !== 'view'">cancel</mat-icon>
+                </mat-chip-row>
+                <input placeholder="Add tag..."
+                       [formControl]="tagInput"
+                       [matChipInputFor]="chipGrid"
+                       [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                       [matChipInputAddOnBlur]="true"
+                       [matAutocomplete]="auto"
+                       (matChipInputTokenEnd)="addTag($event)"
+                       [disabled]="mode === 'view'" />
+              </mat-chip-grid>
+              <mat-autocomplete #auto="matAutocomplete" 
+                                (optionSelected)="addTagFromAutocomplete($event.option.value)">
+                <mat-option *ngFor="let tag of filteredTags | async" [value]="tag">
+                  {{ tag }}
+                </mat-option>
+                <mat-option *ngIf="(filteredTags | async)?.length === 0 && tagInput.value" 
+                            [value]="tagInput.value" class="new-tag-option">
+                  <mat-icon>add</mat-icon>
+                  Create new tag: "{{ tagInput.value }}"
+                </mat-option>
+              </mat-autocomplete>
+              <mat-hint>Start typing to see suggestions or create new tags</mat-hint>
+            </mat-form-field>
+          </div>
+
+          <div class="security-section">
+            <label class="field-label">Security Schemes</label>
+            <div class="security-schemes-list">
+              <mat-card *ngFor="let scheme of availableSecuritySchemes" 
+                        class="security-scheme-card"
+                        [class.selected]="isSecuritySchemeSelected(scheme.name)"
+                        (click)="toggleSecurityScheme(scheme.name)"
+                        [matTooltip]="scheme.description || ''"
+                        [style.cursor]="mode === 'view' ? 'default' : 'pointer'">
+                <mat-card-content>
+                  <div class="scheme-header">
+                    <mat-icon [color]="isSecuritySchemeSelected(scheme.name) ? 'primary' : ''">
+                      {{ getSecuritySchemeIcon(scheme.type) }}
+                    </mat-icon>
+                    <div class="scheme-info">
+                      <div class="scheme-name">{{ scheme.name }}</div>
+                      <div class="scheme-type">{{ scheme.type }}</div>
+                    </div>
+                    <mat-checkbox 
+                      [checked]="isSecuritySchemeSelected(scheme.name)"
+                      [disabled]="mode === 'view'"
+                      (click)="$event.stopPropagation()">
+                    </mat-checkbox>
+                  </div>
+                </mat-card-content>
+              </mat-card>
+              <div class="no-security-schemes" *ngIf="availableSecuritySchemes.length === 0">
+                <mat-icon>lock_open</mat-icon>
+                <p>No security schemes defined</p>
+                <p class="hint">Security schemes can be defined in the OpenAPI components section</p>
+              </div>
+            </div>
+            <mat-hint>Select security schemes that apply to this endpoint</mat-hint>
+          </div>
+
+          <mat-checkbox formControlName="deprecated" class="full-width">
+            Mark as deprecated
+          </mat-checkbox>
+        </div>
+      </mat-tab>
+
+      <!-- Parameters Tab -->
+      <mat-tab label="Parameters" [matBadge]="parameters.length" matBadgeColor="primary" 
+               [matBadgeHidden]="parameters.length === 0">
+        <div class="tab-content">
+          <div class="parameters-header">
+            <div class="auto-detect-section" *ngIf="mode !== 'view'">
+              <button mat-stroked-button (click)="autoDetectPathParameters()" 
+                      [disabled]="!endpointForm.get('path')?.value">
+                <mat-icon>auto_fix_high</mat-icon>
+                Auto-detect Path Parameters
+              </button>
+              <mat-hint *ngIf="detectedPathParams.length > 0" class="detected-hint">
+                Detected: {{ detectedPathParams.join(', ') }}
+              </mat-hint>
+            </div>
+            
+            <div class="add-parameter-buttons" *ngIf="mode !== 'view'">
+              <button mat-button [matMenuTriggerFor]="addParamMenu" color="primary">
+                <mat-icon>add</mat-icon>
+                Add Parameter
+                <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #addParamMenu="matMenu">
+                <button mat-menu-item (click)="addParameter('path')">
+                  <mat-icon>route</mat-icon>
+                  Path Parameter
+                </button>
+                <button mat-menu-item (click)="addParameter('query')">
+                  <mat-icon>help_outline</mat-icon>
+                  Query Parameter
+                </button>
+                <button mat-menu-item (click)="addParameter('header')">
+                  <mat-icon>dns</mat-icon>
+                  Header Parameter
+                </button>
+                <button mat-menu-item (click)="addParameter('cookie')">
+                  <mat-icon>cookie</mat-icon>
+                  Cookie Parameter
+                </button>
+              </mat-menu>
+            </div>
+          </div>
+
+          <!-- Path Parameters Section -->
+          <div class="parameter-section" *ngIf="getParametersByType('path').length > 0">
+            <h4 class="section-title">
+              <mat-icon>route</mat-icon>
+              Path Parameters
+              <mat-chip>{{ getParametersByType('path').length }}</mat-chip>
+            </h4>
+            <div formArrayName="parameters" class="parameters-list">
+              <ng-container *ngFor="let param of parameters.controls; let i = index">
+                <mat-expansion-panel *ngIf="param.get('in')?.value === 'path'"
+                                      [formGroupName]="i" class="parameter-panel">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      <span class="param-name">{{ param.get('name')?.value || 'New Parameter' }}</span>
+                      <mat-chip *ngIf="param.get('required')?.value" class="required-chip">Required</mat-chip>
+                    </mat-panel-title>
+                    <mat-panel-description>
+                      <span class="param-type">{{ param.get('schema')?.value?.type || 'string' }}</span>
+                      <span class="param-description">{{ param.get('description')?.value || '' }}</span>
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
+
+                  <div class="form-row">
+                    <mat-form-field appearance="outline" class="half-width">
+                      <mat-label>Name <span class="required-marker">*</span></mat-label>
+                      <input matInput formControlName="name" placeholder="parameterName"
+                             (blur)="validateParameterName(i)">
+                      <mat-error *ngIf="param.get('name')?.hasError('required')">
+                        Parameter name is required
+                      </mat-error>
+                      <mat-error *ngIf="hasParameterError(i, 'name')">
+                        {{ getParameterError(i, 'name') }}
+                      </mat-error>
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="quarter-width">
+                      <mat-label>Location</mat-label>
+                      <mat-select formControlName="in" (selectionChange)="onParameterLocationChange(i)">
+                        <mat-option *ngFor="let loc of parameterLocations" [value]="loc">
+                          {{ loc }}
+                        </mat-option>
+                      </mat-select>
+                    </mat-form-field>
+
+                <mat-form-field appearance="outline" class="third-width">
+                  <mat-label>Type</mat-label>
+                  <mat-select formControlName="type">
+                    <mat-option *ngFor="let type of parameterTypes" [value]="type">
+                      {{ type }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+              </div>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Description</mat-label>
+                <input matInput formControlName="description">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Example</mat-label>
+                <input matInput formControlName="example">
+              </mat-form-field>
+
+              <mat-checkbox formControlName="required">Required</mat-checkbox>
+
+              <button mat-icon-button color="warn" (click)="removeParameter(i)"
+                      *ngIf="mode !== 'view'" class="remove-button">
+                <mat-icon>delete</mat-icon>
+              </button>
+                </mat-expansion-panel>
+              </ng-container>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- Enhanced Request Body Tab -->
+      <mat-tab label="Request Body" [matBadge]="hasRequestBody() ? '1' : ''" matBadgeColor="accent"
+               [matBadgeHidden]="!hasRequestBody()">
+        <div class="tab-content" formGroupName="requestBody">
+          
+          <!-- Request Body Header -->
+          <div class="request-body-header">
+            <mat-slide-toggle formControlName="enabled" (change)="onRequestBodyToggle($event)">
+              Enable Request Body
+            </mat-slide-toggle>
+            
+            <mat-checkbox formControlName="required" [disabled]="!endpointForm.get('requestBody.enabled')?.value">
+              Required
+            </mat-checkbox>
+          </div>
+          
+          <div class="request-body-content" *ngIf="endpointForm.get('requestBody.enabled')?.value">
+            
+            <!-- Description -->
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Description</mat-label>
+              <textarea matInput formControlName="description" rows="2"
+                        placeholder="Describe the request body content"></textarea>
+              <mat-hint>Explain what data this endpoint expects</mat-hint>
+            </mat-form-field>
+            
+            <!-- Content Types -->
+            <div class="content-types-section">
+              <h4>Content Types</h4>
+              <mat-chip-listbox formControlName="contentTypes" multiple aria-label="Content types">
+                <mat-chip-option *ngFor="let type of availableContentTypes" [value]="type"
+                                 [selected]="isContentTypeSelected(type)">
+                  <mat-icon *ngIf="type === 'application/json'">code</mat-icon>
+                  <mat-icon *ngIf="type === 'application/xml'">code</mat-icon>
+                  <mat-icon *ngIf="type === 'multipart/form-data'">attach_file</mat-icon>
+                  <mat-icon *ngIf="type === 'application/x-www-form-urlencoded'">text_fields</mat-icon>
+                  <mat-icon *ngIf="type === 'text/plain'">description</mat-icon>
+                  {{ type }}
+                </mat-chip-option>
+              </mat-chip-listbox>
+              
+              <mat-form-field appearance="outline" class="custom-content-type">
+                <mat-label>Custom Content Type</mat-label>
+                <input matInput #customContentType placeholder="application/custom+json">
+                <button mat-icon-button matSuffix (click)="addCustomContentType(customContentType.value)">
+                  <mat-icon>add</mat-icon>
+                </button>
+              </mat-form-field>
+            </div>
+            
+            <!-- Schema Templates -->
+            <div class="schema-templates" *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/json')">
+              <h4>
+                Schema Templates
+                <button mat-icon-button [matMenuTriggerFor]="schemaMenu" matTooltip="Use template">
+                  <mat-icon>inventory_2</mat-icon>
+                </button>
+              </h4>
+              
+              <mat-menu #schemaMenu="matMenu">
+                <button mat-menu-item (click)="applySchemaTemplate('user')">
+                  <mat-icon>person</mat-icon>
+                  User Object
+                </button>
+                <button mat-menu-item (click)="applySchemaTemplate('product')">
+                  <mat-icon>shopping_cart</mat-icon>
+                  Product Object
+                </button>
+                <button mat-menu-item (click)="applySchemaTemplate('order')">
+                  <mat-icon>receipt</mat-icon>
+                  Order Object
+                </button>
+                <button mat-menu-item (click)="applySchemaTemplate('pagination')">
+                  <mat-icon>view_list</mat-icon>
+                  Paginated List
+                </button>
+                <button mat-menu-item (click)="applySchemaTemplate('error')">
+                  <mat-icon>error</mat-icon>
+                  Error Response
+                </button>
+                <button mat-menu-item (click)="applySchemaTemplate('custom')">
+                  <mat-icon>edit</mat-icon>
+                  Custom Schema
+                </button>
+              </mat-menu>
+            </div>
+            
+            <!-- Tab Group for Different Content Types -->
+            <mat-tab-group *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.length > 0">
+              
+              <!-- JSON Content Type -->
+              <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/json')"
+                       label="JSON">
+                <div class="content-type-content">
+                  
+                  <!-- Schema Editor with Toolbar -->
+                  <div class="editor-section">
+                    <div class="editor-header">
+                      <h4>JSON Schema</h4>
+                      <div class="editor-actions">
+                        <button mat-icon-button (click)="validateSchema()" matTooltip="Validate schema">
+                          <mat-icon>check_circle</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="formatSchema()" matTooltip="Format JSON">
+                          <mat-icon>format_align_left</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="generateSchemaFromExample()" 
+                                matTooltip="Generate from example">
+                          <mat-icon>auto_fix_high</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="uploadSchema()" matTooltip="Upload schema file">
+                          <mat-icon>upload_file</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <monaco-editor
+                      [value]="getContentSchema('application/json')"
+                      (valueChange)="updateContentSchema('application/json', $event)"
+                      [language]="'json'"
+                      [readOnly]="mode === 'view'"
+                      [options]="{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        fontSize: 13,
+                        suggestOnTriggerCharacters: true,
+                        quickSuggestions: true
+                      }"
+                      style="height: 250px;">
+                    </monaco-editor>
+                    
+                    <mat-error *ngIf="schemaValidationError" class="schema-error">
+                      {{ schemaValidationError }}
+                    </mat-error>
+                  </div>
+                  
+                  <!-- Example Editor -->
+                  <div class="editor-section">
+                    <div class="editor-header">
+                      <h4>Example</h4>
+                      <div class="editor-actions">
+                        <button mat-icon-button (click)="generateExampleFromSchema()" 
+                                matTooltip="Generate from schema">
+                          <mat-icon>auto_awesome</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="validateExample()" 
+                                matTooltip="Validate against schema">
+                          <mat-icon>fact_check</mat-icon>
+                        </button>
+                        <button mat-icon-button (click)="formatExample()" matTooltip="Format JSON">
+                          <mat-icon>format_align_left</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <monaco-editor
+                      [value]="getContentExample('application/json')"
+                      (valueChange)="updateContentExample('application/json', $event)"
+                      [language]="'json'"
+                      [readOnly]="mode === 'view'"
+                      [options]="{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        fontSize: 13
+                      }"
+                      style="height: 200px;">
+                    </monaco-editor>
+                    
+                    <mat-error *ngIf="exampleValidationError" class="example-error">
+                      {{ exampleValidationError }}
+                    </mat-error>
+                  </div>
+                  
+                  <!-- Schema Preview -->
+                  <div class="schema-preview">
+                    <h4>
+                      Schema Preview
+                      <button mat-icon-button (click)="toggleSchemaPreview()">
+                        <mat-icon>{{ showSchemaPreview ? 'visibility_off' : 'visibility' }}</mat-icon>
+                      </button>
+                    </h4>
+                    
+                    <div class="preview-content" *ngIf="showSchemaPreview">
+                      <div class="schema-tree">
+                        <ng-container *ngFor="let property of schemaProperties">
+                          <div class="property-item">
+                            <span class="property-name">{{ property.name }}</span>
+                            <mat-chip class="property-type">{{ property.type }}</mat-chip>
+                            <mat-chip class="property-required" *ngIf="property.required">Required</mat-chip>
+                            <span class="property-description">{{ property.description }}</span>
+                          </div>
+                        </ng-container>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </mat-tab>
+              
+              <!-- XML Content Type -->
+              <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/xml')"
+                       label="XML">
+                <div class="content-type-content">
+                  <div class="editor-section">
+                    <h4>XML Schema (XSD)</h4>
+                    <monaco-editor
+                      [value]="getContentSchema('application/xml')"
+                      (valueChange)="updateContentSchema('application/xml', $event)"
+                      [language]="'xml'"
+                      [readOnly]="mode === 'view'"
+                      style="height: 250px;">
+                    </monaco-editor>
+                  </div>
+                  
+                  <div class="editor-section">
+                    <h4>XML Example</h4>
+                    <monaco-editor
+                      [value]="getContentExample('application/xml')"
+                      (valueChange)="updateContentExample('application/xml', $event)"
+                      [language]="'xml'"
+                      [readOnly]="mode === 'view'"
+                      style="height: 200px;">
+                    </monaco-editor>
+                  </div>
+                </div>
+              </mat-tab>
+              
+              <!-- Form Data Content Type -->
+              <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('multipart/form-data')"
+                       label="Form Data">
+                <div class="content-type-content">
+                  <div class="form-fields-section">
+                    <h4>Form Fields</h4>
+                    
+                    <button mat-raised-button color="primary" (click)="addFormField()" *ngIf="mode !== 'view'">
+                      <mat-icon>add</mat-icon>
+                      Add Field
+                    </button>
+                    
+                    <div class="form-fields-list">
+                      <mat-expansion-panel *ngFor="let field of formFields; let i = index" class="form-field-panel">
+                        <mat-expansion-panel-header>
+                          <mat-panel-title>
+                            {{ field.name || 'New Field' }}
+                          </mat-panel-title>
+                          <mat-panel-description>
+                            {{ field.type }} {{ field.required ? '(Required)' : '' }}
+                          </mat-panel-description>
+                        </mat-expansion-panel-header>
+                        
+                        <div class="form-row">
+                          <mat-form-field appearance="outline" class="third-width">
+                            <mat-label>Field Name</mat-label>
+                            <input matInput [(ngModel)]="field.name" [ngModelOptions]="{standalone: true}">
+                          </mat-form-field>
+                          
+                          <mat-form-field appearance="outline" class="third-width">
+                            <mat-label>Field Type</mat-label>
+                            <mat-select [(ngModel)]="field.type" [ngModelOptions]="{standalone: true}">
+                              <mat-option value="string">String</mat-option>
+                              <mat-option value="number">Number</mat-option>
+                              <mat-option value="boolean">Boolean</mat-option>
+                              <mat-option value="file">File</mat-option>
+                              <mat-option value="array">Array</mat-option>
+                            </mat-select>
+                          </mat-form-field>
+                          
+                          <mat-checkbox [(ngModel)]="field.required" [ngModelOptions]="{standalone: true}"
+                                        class="third-width">
+                            Required
+                          </mat-checkbox>
+                        </div>
+                        
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Description</mat-label>
+                          <textarea matInput [(ngModel)]="field.description" [ngModelOptions]="{standalone: true}"
+                                    rows="2"></textarea>
+                        </mat-form-field>
+                        
+                        <div class="form-row" *ngIf="field.type === 'file'">
+                          <mat-form-field appearance="outline" class="half-width">
+                            <mat-label>Accept Types</mat-label>
+                            <input matInput [(ngModel)]="field.accept" [ngModelOptions]="{standalone: true}"
+                                   placeholder="image/*, .pdf, .doc">
+                          </mat-form-field>
+                          
+                          <mat-form-field appearance="outline" class="half-width">
+                            <mat-label>Max Size (MB)</mat-label>
+                            <input matInput type="number" [(ngModel)]="field.maxSize" 
+                                   [ngModelOptions]="{standalone: true}">
+                          </mat-form-field>
+                        </div>
+                        
+                        <button mat-icon-button color="warn" (click)="removeFormField(i)" *ngIf="mode !== 'view'">
+                          <mat-icon>delete</mat-icon>
+                        </button>
+                      </mat-expansion-panel>
+                    </div>
+                  </div>
+                </div>
+              </mat-tab>
+              
+              <!-- URL Encoded Content Type -->
+              <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/x-www-form-urlencoded')"
+                       label="URL Encoded">
+                <div class="content-type-content">
+                  <div class="url-encoded-section">
+                    <h4>URL Encoded Parameters</h4>
+                    
+                    <button mat-raised-button color="primary" (click)="addUrlEncodedParam()" *ngIf="mode !== 'view'">
+                      <mat-icon>add</mat-icon>
+                      Add Parameter
+                    </button>
+                    
+                    <div class="url-params-list">
+                      <div class="url-param-item" *ngFor="let param of urlEncodedParams; let i = index">
+                        <mat-form-field appearance="outline" class="param-name">
+                          <mat-label>Name</mat-label>
+                          <input matInput [(ngModel)]="param.name" [ngModelOptions]="{standalone: true}">
+                        </mat-form-field>
+                        
+                        <mat-form-field appearance="outline" class="param-value">
+                          <mat-label>Example Value</mat-label>
+                          <input matInput [(ngModel)]="param.value" [ngModelOptions]="{standalone: true}">
+                        </mat-form-field>
+                        
+                        <mat-checkbox [(ngModel)]="param.required" [ngModelOptions]="{standalone: true}">
+                          Required
+                        </mat-checkbox>
+                        
+                        <button mat-icon-button color="warn" (click)="removeUrlEncodedParam(i)" *ngIf="mode !== 'view'">
+                          <mat-icon>delete</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </mat-tab>
+              
+              <!-- Plain Text Content Type -->
+              <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('text/plain')"
+                       label="Plain Text">
+                <div class="content-type-content">
+                  <div class="editor-section">
+                    <h4>Text Content Example</h4>
+                    <monaco-editor
+                      [value]="getContentExample('text/plain')"
+                      (valueChange)="updateContentExample('text/plain', $event)"
+                      [language]="'plaintext'"
+                      [readOnly]="mode === 'view'"
+                      style="height: 300px;">
+                    </monaco-editor>
+                  </div>
+                </div>
+              </mat-tab>
+            </mat-tab-group>
+            
+            <!-- Empty State -->
+            <div class="empty-state" *ngIf="!endpointForm.get('requestBody.contentTypes')?.value?.length">
+              <mat-icon>inbox</mat-icon>
+              <p>No content types selected</p>
+              <p class="hint">Select one or more content types above</p>
+            </div>
+          </div>
+          
+          <!-- Disabled State -->
+          <div class="disabled-state" *ngIf="!endpointForm.get('requestBody.enabled')?.value">
+            <mat-icon>block</mat-icon>
+            <p>Request body is disabled</p>
+            <p class="hint">Enable request body to configure content</p>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- Responses Tab -->
+      <mat-tab label="Responses">
+        <div class="tab-content">
+          <button mat-raised-button color="primary" (click)="addResponse()"
+                  *ngIf="mode !== 'view'" class="add-button">
+            <mat-icon>add</mat-icon>
+            Add Response
+          </button>
+
+          <div formArrayName="responses" class="responses-list">
+            <mat-expansion-panel *ngFor="let response of responses.controls; let i = index"
+                                  [formGroupName]="i" class="response-panel">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  {{ response.get('code')?.value }}
+                </mat-panel-title>
+                <mat-panel-description>
+                  {{ response.get('description')?.value }}
+                </mat-panel-description>
+              </mat-expansion-panel-header>
+
+              <div class="form-row">
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Status Code</mat-label>
+                  <mat-select formControlName="code">
+                    <mat-option *ngFor="let code of responseCodes" [value]="code">
+                      {{ code }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Description</mat-label>
+                  <input matInput formControlName="description">
+                </mat-form-field>
+              </div>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Content Type</mat-label>
+                <mat-select formControlName="contentType">
+                  <mat-option *ngFor="let type of contentTypes" [value]="type">
+                    {{ type }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <div class="editor-section">
+                <h4>Schema</h4>
+                <monaco-editor
+                  [value]="response.get('schema')?.value"
+                  (valueChange)="response.get('schema')?.setValue($event)"
+                  [language]="'json'"
+                  [readOnly]="mode === 'view'"
+                  style="height: 150px;">
+                </monaco-editor>
+              </div>
+
+              <button mat-icon-button color="warn" (click)="removeResponse(i)"
+                      *ngIf="mode !== 'view' && responses.length > 1" class="remove-button">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </mat-expansion-panel>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- AWS Integrations Tab -->
+      <mat-tab label="AWS Integration">
+        <div class="tab-content">
+          <div class="integration-header">
+            <mat-form-field appearance="outline" class="integration-type-selector">
+              <mat-label>Integration Type</mat-label>
+              <mat-select formControlName="integrationType" (selectionChange)="onIntegrationTypeChange($event)">
+                <mat-option value="">None</mat-option>
+                <mat-option value="lambda">
+                  <mat-icon>functions</mat-icon>
+                  AWS Lambda
+                </mat-option>
+                <mat-option value="http">
+                  <mat-icon>http</mat-icon>
+                  HTTP Proxy
+                </mat-option>
+                <mat-option value="mock">
+                  <mat-icon>code</mat-icon>
+                  Mock Response
+                </mat-option>
+                <mat-option value="stepfunction">
+                  <mat-icon>account_tree</mat-icon>
+                  Step Functions
+                </mat-option>
+                <mat-option value="aws_service">
+                  <mat-icon>cloud</mat-icon>
+                  AWS Service
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <!-- Lambda Integration -->
+          <div class="integration-content" *ngIf="integrationType === 'lambda'">
+            <h4>Lambda Function Configuration</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Function ARN</mat-label>
+              <input matInput formControlName="lambdaArn" 
+                     placeholder="arn:aws:lambda:region:account:function:name">
+              <mat-hint>Enter the complete ARN of your Lambda function</mat-hint>
+            </mat-form-field>
+
+            <div class="form-row">
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Timeout (ms)</mat-label>
+                <input matInput type="number" formControlName="lambdaTimeout" 
+                       min="1" max="29000" placeholder="29000">
+                <mat-hint>Maximum: 29000ms (29 seconds)</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="half-width">
+                <mat-label>Maximum Retries</mat-label>
+                <input matInput type="number" formControlName="lambdaRetries" 
+                       min="0" max="2" placeholder="0">
+                <mat-hint>Number of retry attempts on failure</mat-hint>
+              </mat-form-field>
+            </div>
+
+            <mat-checkbox formControlName="lambdaProxy" class="full-width">
+              Use Lambda Proxy Integration
+            </mat-checkbox>
+
+            <mat-checkbox formControlName="lambdaAsync" class="full-width">
+              Invoke Asynchronously
+            </mat-checkbox>
+          </div>
+
+          <!-- HTTP Integration -->
+          <div class="integration-content" *ngIf="integrationType === 'http'">
+            <h4>HTTP Proxy Configuration</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>HTTP Endpoint URL</mat-label>
+              <input matInput formControlName="httpUrl" 
+                     placeholder="https://api.example.com/endpoint">
+              <mat-hint>The backend HTTP endpoint URL</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>HTTP Method</mat-label>
+              <mat-select formControlName="httpMethod">
+                <mat-option value="ANY">ANY</mat-option>
+                <mat-option *ngFor="let method of methods" [value]="method">
+                  {{ method }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <div class="http-headers-section">
+              <h5>Custom Headers</h5>
+              <div class="headers-list">
+                <div *ngFor="let header of httpHeaders; let i = index" class="header-item">
+                  <mat-form-field appearance="outline" class="header-name">
+                    <mat-label>Header Name</mat-label>
+                    <input matInput [(ngModel)]="header.name" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-value">
+                    <mat-label>Header Value</mat-label>
+                    <input matInput [(ngModel)]="header.value" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeHttpHeader(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </div>
+              <button mat-stroked-button (click)="addHttpHeader()">
+                <mat-icon>add</mat-icon>
+                Add Header
+              </button>
+            </div>
+
+            <mat-checkbox formControlName="httpProxy" class="full-width">
+              Use HTTP Proxy Integration
+            </mat-checkbox>
+          </div>
+
+          <!-- Mock Integration -->
+          <div class="integration-content" *ngIf="integrationType === 'mock'">
+            <h4>Mock Response Configuration</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Response Status Code</mat-label>
+              <input matInput formControlName="mockStatusCode" 
+                     type="number" min="100" max="599" placeholder="200">
+            </mat-form-field>
+
+            <div class="editor-section">
+              <h5>Response Body</h5>
+              <monaco-editor
+                [value]="mockResponseBody"
+                (valueChange)="updateMockResponseBody($event)"
+                [language]="'json'"
+                [height]="'200px'">
+              </monaco-editor>
+            </div>
+
+            <div class="mock-headers-section">
+              <h5>Response Headers</h5>
+              <div class="headers-list">
+                <div *ngFor="let header of mockHeaders; let i = index" class="header-item">
+                  <mat-form-field appearance="outline" class="header-name">
+                    <mat-label>Header Name</mat-label>
+                    <input matInput [(ngModel)]="header.name" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-value">
+                    <mat-label>Header Value</mat-label>
+                    <input matInput [(ngModel)]="header.value" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeMockHeader(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </div>
+              <button mat-stroked-button (click)="addMockHeader()">
+                <mat-icon>add</mat-icon>
+                Add Header
+              </button>
+            </div>
+          </div>
+
+          <!-- Step Functions Integration -->
+          <div class="integration-content" *ngIf="integrationType === 'stepfunction'">
+            <h4>Step Functions Configuration</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>State Machine ARN</mat-label>
+              <input matInput formControlName="stepFunctionArn" 
+                     placeholder="arn:aws:states:region:account:stateMachine:name">
+              <mat-hint>Enter the ARN of your Step Functions state machine</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Execution Type</mat-label>
+              <mat-select formControlName="stepFunctionType">
+                <mat-option value="STANDARD">Standard (Synchronous)</mat-option>
+                <mat-option value="EXPRESS">Express (Asynchronous)</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+
+          <!-- AWS Service Integration -->
+          <div class="integration-content" *ngIf="integrationType === 'aws_service'">
+            <h4>AWS Service Configuration</h4>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Service Name</mat-label>
+              <mat-select formControlName="awsServiceName">
+                <mat-option value="dynamodb">DynamoDB</mat-option>
+                <mat-option value="s3">S3</mat-option>
+                <mat-option value="sqs">SQS</mat-option>
+                <mat-option value="sns">SNS</mat-option>
+                <mat-option value="kinesis">Kinesis</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Action</mat-label>
+              <input matInput formControlName="awsServiceAction" 
+                     placeholder="e.g., GetItem, PutObject, SendMessage">
+            </mat-form-field>
+          </div>
+
+          <!-- Mapping Templates Section -->
+          <div class="mapping-templates-section" *ngIf="integrationType && integrationType !== ''">
+            <mat-expansion-panel>
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon>transform</mat-icon>
+                  Request/Response Mapping Templates
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+
+              <div class="mapping-content">
+                <mat-tab-group>
+                  <mat-tab label="Request Mapping">
+                    <div class="mapping-editor">
+                      <div class="editor-header">
+                        <h5>Request Transformation Template (VTL)</h5>
+                        <button mat-icon-button (click)="loadRequestTemplate()" matTooltip="Load template">
+                          <mat-icon>folder_open</mat-icon>
+                        </button>
+                      </div>
+                      <monaco-editor
+                        [value]="requestMappingTemplate"
+                        (valueChange)="updateRequestMappingTemplate($event)"
+                        [language]="'velocity'"
+                        [height]="'250px'">
+                      </monaco-editor>
+                    </div>
+                  </mat-tab>
+
+                  <mat-tab label="Response Mapping">
+                    <div class="mapping-editor">
+                      <div class="editor-header">
+                        <h5>Response Transformation Template (VTL)</h5>
+                        <button mat-icon-button (click)="loadResponseTemplate()" matTooltip="Load template">
+                          <mat-icon>folder_open</mat-icon>
+                        </button>
+                      </div>
+                      <monaco-editor
+                        [value]="responseMappingTemplate"
+                        (valueChange)="updateResponseMappingTemplate($event)"
+                        [language]="'velocity'"
+                        [height]="'250px'">
+                      </monaco-editor>
+                    </div>
+                  </mat-tab>
+                </mat-tab-group>
+              </div>
+            </mat-expansion-panel>
+
+            <!-- Error Handling -->
+            <mat-expansion-panel>
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  <mat-icon>error_outline</mat-icon>
+                  Error Handling Configuration
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+
+              <div class="error-handling-content">
+                <div class="error-mapping-list">
+                  <h5>Error Response Mappings</h5>
+                  <div *ngFor="let errorMap of errorMappings; let i = index" class="error-mapping-item">
+                    <mat-form-field appearance="outline" class="error-pattern">
+                      <mat-label>Error Pattern (Regex)</mat-label>
+                      <input matInput [(ngModel)]="errorMap.pattern" [ngModelOptions]="{standalone: true}"
+                             placeholder=".*Error.*">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="error-status">
+                      <mat-label>HTTP Status</mat-label>
+                      <input matInput type="number" [(ngModel)]="errorMap.statusCode" 
+                             [ngModelOptions]="{standalone: true}" min="400" max="599">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="error-response">
+                      <mat-label>Response Template</mat-label>
+                      <textarea matInput [(ngModel)]="errorMap.response" 
+                                [ngModelOptions]="{standalone: true}" rows="2"></textarea>
+                    </mat-form-field>
+                    <button mat-icon-button (click)="removeErrorMapping(i)" color="warn">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                  <button mat-stroked-button (click)="addErrorMapping()">
+                    <mat-icon>add</mat-icon>
+                    Add Error Mapping
+                  </button>
+                </div>
+              </div>
+            </mat-expansion-panel>
+          </div>
+
+          <!-- No Integration Selected -->
+          <div class="empty-state" *ngIf="!integrationType || integrationType === ''">
+            <mat-icon>integration_instructions</mat-icon>
+            <p>No integration configured</p>
+            <p class="hint">Select an integration type to connect this endpoint to a backend service</p>
+          </div>
+        </div>
+      </mat-tab>
+
+      <!-- Policies & Settings Tab -->
+      <mat-tab label="Policies & Settings">
+        <div class="tab-content">
+          <!-- Throttling Section -->
+          <mat-expansion-panel [expanded]="true">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>speed</mat-icon>
+                Throttling & Rate Limiting
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <mat-checkbox formControlName="throttlingEnabled" class="full-width">
+                Enable Throttling
+              </mat-checkbox>
+              
+              <div class="form-row" *ngIf="endpointForm.get('throttlingEnabled')?.value">
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Rate Limit (requests/second)</mat-label>
+                  <input matInput type="number" formControlName="rateLimit" 
+                         min="1" max="10000" placeholder="1000">
+                  <mat-hint>Maximum requests per second</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="half-width">
+                  <mat-label>Burst Limit</mat-label>
+                  <input matInput type="number" formControlName="burstLimit" 
+                         min="1" max="20000" placeholder="2000">
+                  <mat-hint>Maximum concurrent requests</mat-hint>
+                </mat-form-field>
+              </div>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Usage Plan</h5>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Usage Plan</mat-label>
+                <mat-select formControlName="usagePlan">
+                  <mat-option value="">None</mat-option>
+                  <mat-option value="basic">Basic (1000 req/day)</mat-option>
+                  <mat-option value="standard">Standard (10000 req/day)</mat-option>
+                  <mat-option value="premium">Premium (100000 req/day)</mat-option>
+                  <mat-option value="custom">Custom</mat-option>
+                </mat-select>
+              </mat-form-field>
+              
+              <div class="form-row" *ngIf="endpointForm.get('usagePlan')?.value === 'custom'">
+                <mat-form-field appearance="outline" class="third-width">
+                  <mat-label>Daily Quota</mat-label>
+                  <input matInput type="number" formControlName="dailyQuota" 
+                         min="1" placeholder="10000">
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="third-width">
+                  <mat-label>Weekly Quota</mat-label>
+                  <input matInput type="number" formControlName="weeklyQuota" 
+                         min="1" placeholder="70000">
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="third-width">
+                  <mat-label>Monthly Quota</mat-label>
+                  <input matInput type="number" formControlName="monthlyQuota" 
+                         min="1" placeholder="300000">
+                </mat-form-field>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Caching Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>cached</mat-icon>
+                Caching Configuration
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <mat-checkbox formControlName="cacheEnabled" class="full-width">
+                Enable Response Caching
+              </mat-checkbox>
+              
+              <div *ngIf="endpointForm.get('cacheEnabled')?.value">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Cache TTL (seconds)</mat-label>
+                  <input matInput type="number" formControlName="cacheTtl" 
+                         min="0" max="3600" placeholder="300">
+                  <mat-hint>Time to live for cached responses (0-3600 seconds)</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Cache Key Parameters</mat-label>
+                  <mat-chip-grid #cacheKeyChipGrid>
+                    <mat-chip-row *ngFor="let param of cacheKeyParams" 
+                                  (removed)="removeCacheKeyParam(param)"
+                                  [removable]="mode !== 'view'">
+                      {{ param }}
+                      <mat-icon matChipRemove *ngIf="mode !== 'view'">cancel</mat-icon>
+                    </mat-chip-row>
+                    <input placeholder="Add parameter..."
+                           [matChipInputFor]="cacheKeyChipGrid"
+                           [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                           [matChipInputAddOnBlur]="true"
+                           (matChipInputTokenEnd)="addCacheKeyParam($event)"
+                           [disabled]="mode === 'view'" />
+                  </mat-chip-grid>
+                  <mat-hint>Parameters to include in cache key</mat-hint>
+                </mat-form-field>
+                
+                <mat-checkbox formControlName="cacheUnauthorized" class="full-width">
+                  Cache responses for unauthorized requests
+                </mat-checkbox>
+                
+                <mat-checkbox formControlName="cacheEncrypted" class="full-width">
+                  Encrypt cached data
+                </mat-checkbox>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- CORS Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>public</mat-icon>
+                CORS Configuration
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <mat-checkbox formControlName="corsEnabled" class="full-width">
+                Enable CORS
+              </mat-checkbox>
+              
+              <div *ngIf="endpointForm.get('corsEnabled')?.value">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Allowed Origins</mat-label>
+                  <textarea matInput formControlName="corsOrigins" rows="3"
+                            placeholder="https://example.com&#10;https://app.example.com&#10;*">
+                  </textarea>
+                  <mat-hint>One origin per line, use * for all origins</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Allowed Methods</mat-label>
+                  <mat-select formControlName="corsMethods" multiple>
+                    <mat-option *ngFor="let method of methods" [value]="method">
+                      {{ method }}
+                    </mat-option>
+                  </mat-select>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Allowed Headers</mat-label>
+                  <textarea matInput formControlName="corsHeaders" rows="2"
+                            placeholder="Content-Type&#10;Authorization&#10;X-Api-Key">
+                  </textarea>
+                  <mat-hint>One header per line</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Exposed Headers</mat-label>
+                  <textarea matInput formControlName="corsExposedHeaders" rows="2"
+                            placeholder="X-Request-Id&#10;X-Rate-Limit">
+                  </textarea>
+                  <mat-hint>Headers exposed to the client</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Max Age (seconds)</mat-label>
+                  <input matInput type="number" formControlName="corsMaxAge" 
+                         min="0" max="86400" placeholder="3600">
+                  <mat-hint>How long browsers can cache CORS headers</mat-hint>
+                </mat-form-field>
+                
+                <mat-checkbox formControlName="corsCredentials" class="full-width">
+                  Allow Credentials
+                </mat-checkbox>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Authentication & Authorization Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>security</mat-icon>
+                Authentication & Authorization
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <mat-checkbox formControlName="apiKeyRequired" class="full-width">
+                Require API Key
+              </mat-checkbox>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Custom Authorizer</h5>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Authorizer Type</mat-label>
+                <mat-select formControlName="authorizerType">
+                  <mat-option value="">None</mat-option>
+                  <mat-option value="lambda">Lambda Authorizer</mat-option>
+                  <mat-option value="cognito">Cognito User Pool</mat-option>
+                  <mat-option value="iam">IAM</mat-option>
+                </mat-select>
+              </mat-form-field>
+              
+              <div *ngIf="endpointForm.get('authorizerType')?.value === 'lambda'">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Lambda Authorizer ARN</mat-label>
+                  <input matInput formControlName="authorizerArn" 
+                         placeholder="arn:aws:lambda:region:account:function:authorizer">
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Token Source</mat-label>
+                  <input matInput formControlName="authorizerTokenSource" 
+                         placeholder="Authorization">
+                  <mat-hint>Header name containing the token</mat-hint>
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>TTL (seconds)</mat-label>
+                  <input matInput type="number" formControlName="authorizerTtl" 
+                         min="0" max="3600" placeholder="300">
+                  <mat-hint>Cache time for authorization result</mat-hint>
+                </mat-form-field>
+              </div>
+              
+              <div *ngIf="endpointForm.get('authorizerType')?.value === 'cognito'">
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>User Pool ARN</mat-label>
+                  <input matInput formControlName="cognitoUserPoolArn" 
+                         placeholder="arn:aws:cognito-idp:region:account:userpool/pool-id">
+                </mat-form-field>
+                
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Scopes</mat-label>
+                  <input matInput formControlName="cognitoScopes" 
+                         placeholder="read write admin">
+                  <mat-hint>Space-separated list of required scopes</mat-hint>
+                </mat-form-field>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Request Validation Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>rule</mat-icon>
+                Request Validation
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <mat-checkbox formControlName="validateRequestBody" class="full-width">
+                Validate Request Body
+              </mat-checkbox>
+              
+              <mat-checkbox formControlName="validateRequestParameters" class="full-width">
+                Validate Request Parameters
+              </mat-checkbox>
+              
+              <mat-checkbox formControlName="validateRequestHeaders" class="full-width">
+                Validate Request Headers
+              </mat-checkbox>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Validation Rules</h5>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Validator</mat-label>
+                <mat-select formControlName="validator">
+                  <mat-option value="">Default</mat-option>
+                  <mat-option value="validate-body">Validate body only</mat-option>
+                  <mat-option value="validate-params">Validate parameters only</mat-option>
+                  <mat-option value="validate-all">Validate all</mat-option>
+                </mat-select>
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Content Type Validation</mat-label>
+                <mat-select formControlName="allowedContentTypes" multiple>
+                  <mat-option value="application/json">application/json</mat-option>
+                  <mat-option value="application/xml">application/xml</mat-option>
+                  <mat-option value="multipart/form-data">multipart/form-data</mat-option>
+                  <mat-option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</mat-option>
+                </mat-select>
+                <mat-hint>Allowed content types for requests</mat-hint>
+              </mat-form-field>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Monitoring & Logging Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>analytics</mat-icon>
+                Monitoring & Logging
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="policy-section">
+              <h5>CloudWatch Logging</h5>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Log Level</mat-label>
+                <mat-select formControlName="logLevel">
+                  <mat-option value="OFF">OFF</mat-option>
+                  <mat-option value="ERROR">ERROR</mat-option>
+                  <mat-option value="INFO">INFO</mat-option>
+                </mat-select>
+              </mat-form-field>
+              
+              <mat-checkbox formControlName="logFullRequests" class="full-width">
+                Log Full Request/Response Data
+              </mat-checkbox>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Metrics</h5>
+              <mat-checkbox formControlName="detailedMetricsEnabled" class="full-width">
+                Enable Detailed CloudWatch Metrics
+              </mat-checkbox>
+              
+              <mat-form-field appearance="outline" class="full-width" 
+                              *ngIf="endpointForm.get('detailedMetricsEnabled')?.value">
+                <mat-label>Custom Metrics</mat-label>
+                <mat-chip-grid #metricsChipGrid>
+                  <mat-chip-row *ngFor="let metric of customMetrics" 
+                                (removed)="removeCustomMetric(metric)"
+                                [removable]="mode !== 'view'">
+                    {{ metric }}
+                    <mat-icon matChipRemove *ngIf="mode !== 'view'">cancel</mat-icon>
+                  </mat-chip-row>
+                  <input placeholder="Add metric name..."
+                         [matChipInputFor]="metricsChipGrid"
+                         [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                         [matChipInputAddOnBlur]="true"
+                         (matChipInputTokenEnd)="addCustomMetric($event)"
+                         [disabled]="mode === 'view'" />
+                </mat-chip-grid>
+              </mat-form-field>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>X-Ray Tracing</h5>
+              <mat-checkbox formControlName="xrayTracingEnabled" class="full-width">
+                Enable AWS X-Ray Tracing
+              </mat-checkbox>
+              
+              <mat-form-field appearance="outline" class="full-width"
+                              *ngIf="endpointForm.get('xrayTracingEnabled')?.value">
+                <mat-label>Sampling Rate (%)</mat-label>
+                <input matInput type="number" formControlName="xraySamplingRate" 
+                       min="0" max="100" placeholder="10">
+                <mat-hint>Percentage of requests to trace (0-100)</mat-hint>
+              </mat-form-field>
+            </div>
+          </mat-expansion-panel>
+        </div>
+      </mat-tab>
+
+      <!-- Advanced Tab -->
+      <mat-tab label="Advanced">
+        <div class="tab-content">
+          <!-- Deploy Tags Section -->
+          <mat-expansion-panel [expanded]="true">
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>local_offer</mat-icon>
+                Deploy Tags & Stages
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <h5>Deploy Tags</h5>
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Deploy Tags</mat-label>
+                <mat-chip-grid #deployTagsChipGrid>
+                  <mat-chip-row *ngFor="let tag of deployTags" 
+                                (removed)="removeDeployTag(tag)"
+                                [removable]="mode !== 'view'">
+                    {{ tag }}
+                    <mat-icon matChipRemove *ngIf="mode !== 'view'">cancel</mat-icon>
+                  </mat-chip-row>
+                  <input placeholder="Add deploy tag..."
+                         [matChipInputFor]="deployTagsChipGrid"
+                         [matChipInputSeparatorKeyCodes]="separatorKeysCodes"
+                         [matChipInputAddOnBlur]="true"
+                         (matChipInputTokenEnd)="addDeployTag($event)"
+                         [disabled]="mode === 'view'" />
+                </mat-chip-grid>
+                <mat-hint>Tags for deployment automation (e.g., prod, staging, dev)</mat-hint>
+              </mat-form-field>
+              
+              <h5>Stage Variables</h5>
+              <div class="stage-variables-list">
+                <div *ngFor="let variable of stageVariables; let i = index" class="stage-variable-item">
+                  <mat-form-field appearance="outline" class="variable-name">
+                    <mat-label>Variable Name</mat-label>
+                    <input matInput [(ngModel)]="variable.name" [ngModelOptions]="{standalone: true}"
+                           placeholder="e.g., lambdaAlias">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="variable-value">
+                    <mat-label>Default Value</mat-label>
+                    <input matInput [(ngModel)]="variable.value" [ngModelOptions]="{standalone: true}"
+                           placeholder="e.g., v1">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="variable-description">
+                    <mat-label>Description</mat-label>
+                    <input matInput [(ngModel)]="variable.description" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeStageVariable(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-stroked-button (click)="addStageVariable()">
+                  <mat-icon>add</mat-icon>
+                  Add Stage Variable
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Documentation Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>description</mat-icon>
+                Documentation
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>External Documentation URL</mat-label>
+                <input matInput formControlName="externalDocsUrl" 
+                       placeholder="https://docs.example.com/api">
+                <mat-hint>Link to external API documentation</mat-hint>
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>External Documentation Description</mat-label>
+                <textarea matInput formControlName="externalDocsDescription" rows="2"
+                          placeholder="Find more information at our documentation site"></textarea>
+              </mat-form-field>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Documentation Parts</h5>
+              <div class="documentation-parts">
+                <div *ngFor="let part of documentationParts; let i = index" class="doc-part-item">
+                  <mat-form-field appearance="outline" class="part-location">
+                    <mat-label>Location</mat-label>
+                    <mat-select [(ngModel)]="part.location" [ngModelOptions]="{standalone: true}">
+                      <mat-option value="METHOD">Method</mat-option>
+                      <mat-option value="PATH_PARAMETER">Path Parameter</mat-option>
+                      <mat-option value="QUERY_PARAMETER">Query Parameter</mat-option>
+                      <mat-option value="REQUEST_HEADER">Request Header</mat-option>
+                      <mat-option value="REQUEST_BODY">Request Body</mat-option>
+                      <mat-option value="RESPONSE">Response</mat-option>
+                      <mat-option value="RESPONSE_HEADER">Response Header</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="part-name">
+                    <mat-label>Name/Code</mat-label>
+                    <input matInput [(ngModel)]="part.name" [ngModelOptions]="{standalone: true}"
+                           placeholder="e.g., 200, userId">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="part-content">
+                    <mat-label>Documentation</mat-label>
+                    <textarea matInput [(ngModel)]="part.content" [ngModelOptions]="{standalone: true}"
+                              rows="2"></textarea>
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeDocumentationPart(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-stroked-button (click)="addDocumentationPart()">
+                  <mat-icon>add</mat-icon>
+                  Add Documentation Part
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Custom Headers Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>http</mat-icon>
+                Custom Headers & Parameters
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <h5>Custom Request Headers</h5>
+              <div class="custom-headers-list">
+                <div *ngFor="let header of customRequestHeaders; let i = index" class="custom-header-item">
+                  <mat-form-field appearance="outline" class="header-name">
+                    <mat-label>Header Name</mat-label>
+                    <input matInput [(ngModel)]="header.name" [ngModelOptions]="{standalone: true}"
+                           placeholder="X-Custom-Header">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-required">
+                    <mat-label>Required</mat-label>
+                    <mat-select [(ngModel)]="header.required" [ngModelOptions]="{standalone: true}">
+                      <mat-option [value]="true">Yes</mat-option>
+                      <mat-option [value]="false">No</mat-option>
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-description">
+                    <mat-label>Description</mat-label>
+                    <input matInput [(ngModel)]="header.description" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeCustomRequestHeader(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-stroked-button (click)="addCustomRequestHeader()">
+                  <mat-icon>add</mat-icon>
+                  Add Request Header
+                </button>
+              </div>
+              
+              <mat-divider class="section-divider"></mat-divider>
+              
+              <h5>Custom Response Headers</h5>
+              <div class="custom-headers-list">
+                <div *ngFor="let header of customResponseHeaders; let i = index" class="custom-header-item">
+                  <mat-form-field appearance="outline" class="header-name">
+                    <mat-label>Header Name</mat-label>
+                    <input matInput [(ngModel)]="header.name" [ngModelOptions]="{standalone: true}"
+                           placeholder="X-Response-Header">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-value">
+                    <mat-label>Value/Mapping</mat-label>
+                    <input matInput [(ngModel)]="header.value" [ngModelOptions]="{standalone: true}"
+                           placeholder="integration.response.header.x-header">
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" class="header-description">
+                    <mat-label>Description</mat-label>
+                    <input matInput [(ngModel)]="header.description" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  <button mat-icon-button (click)="removeCustomResponseHeader(i)" color="warn">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-stroked-button (click)="addCustomResponseHeader()">
+                  <mat-icon>add</mat-icon>
+                  Add Response Header
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- SDK Generation Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>code</mat-icon>
+                SDK Generation Settings
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Operation Name Override</mat-label>
+                <input matInput formControlName="sdkOperationName" 
+                       placeholder="getUserById">
+                <mat-hint>Custom name for SDK method generation</mat-hint>
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Service Name</mat-label>
+                <input matInput formControlName="sdkServiceName" 
+                       placeholder="UserService">
+                <mat-hint>Service/class name for SDK grouping</mat-hint>
+              </mat-form-field>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Return Type</mat-label>
+                <input matInput formControlName="sdkReturnType" 
+                       placeholder="User[]">
+                <mat-hint>Type hint for strongly-typed SDKs</mat-hint>
+              </mat-form-field>
+              
+              <mat-checkbox formControlName="sdkExclude" class="full-width">
+                Exclude from SDK generation
+              </mat-checkbox>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Vendor Extensions Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>extension</mat-icon>
+                Custom Vendor Extensions (x-*)
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <div class="vendor-extensions-info">
+                <mat-icon>info</mat-icon>
+                <p>Add custom x-* extensions for vendor-specific configurations</p>
+              </div>
+              
+              <div class="vendor-extensions-list">
+                <div *ngFor="let ext of vendorExtensions; let i = index" class="vendor-extension-item">
+                  <mat-form-field appearance="outline" class="extension-name">
+                    <mat-label>Extension Name</mat-label>
+                    <input matInput [(ngModel)]="ext.name" [ngModelOptions]="{standalone: true}"
+                           placeholder="x-custom-property">
+                  </mat-form-field>
+                  <div class="extension-value-wrapper">
+                    <label class="field-label">Value (JSON)</label>
+                    <monaco-editor
+                      [value]="ext.value"
+                      (valueChange)="updateVendorExtension(i, $event)"
+                      [language]="'json'"
+                      [height]="'100px'">
+                    </monaco-editor>
+                  </div>
+                  <button mat-icon-button (click)="removeVendorExtension(i)" color="warn"
+                          class="remove-extension-button">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <button mat-stroked-button (click)="addVendorExtension()">
+                  <mat-icon>add</mat-icon>
+                  Add Vendor Extension
+                </button>
+              </div>
+            </div>
+          </mat-expansion-panel>
+
+          <!-- Raw OpenAPI Section -->
+          <mat-expansion-panel>
+            <mat-expansion-panel-header>
+              <mat-panel-title>
+                <mat-icon>data_object</mat-icon>
+                Raw OpenAPI Extensions
+              </mat-panel-title>
+            </mat-expansion-panel-header>
+            
+            <div class="advanced-section">
+              <div class="raw-openapi-info">
+                <mat-icon>warning</mat-icon>
+                <p>Advanced: Directly edit the OpenAPI operation object extensions</p>
+              </div>
+              
+              <div class="raw-editor-wrapper">
+                <div class="editor-header">
+                  <h5>Custom OpenAPI Extensions (JSON)</h5>
+                  <div class="editor-actions">
+                    <button mat-icon-button (click)="rawExtensions = formatRawExtensions()" matTooltip="Format JSON">
+                      <mat-icon>format_align_left</mat-icon>
+                    </button>
+                    <button mat-icon-button (click)="validateRawExtensions()" matTooltip="Validate JSON">
+                      <mat-icon>check_circle</mat-icon>
+                    </button>
+                  </div>
+                </div>
+                <monaco-editor
+                  [value]="rawExtensions"
+                  (valueChange)="updateRawExtensions($event)"
+                  [language]="'json'"
+                  [height]="'300px'">
+                </monaco-editor>
+                <mat-error *ngIf="rawExtensionsError" class="validation-error">
+                  {{ rawExtensionsError }}
+                </mat-error>
+              </div>
+            </div>
+          </mat-expansion-panel>
+        </div>
+      </mat-tab>
+
+      <!-- Test Tab -->
+      <mat-tab label="Test">
+        <div class="tab-content">
+          <div class="test-section">
+            <h3>Test Configuration</h3>
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Base URL</mat-label>
+              <input matInput [(ngModel)]="testBaseUrl" [ngModelOptions]="{standalone: true}"
+                     placeholder="https://api.example.com">
+              <mat-hint>Enter the base URL for testing this endpoint</mat-hint>
+            </mat-form-field>
+            
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Authorization Header (optional)</mat-label>
+              <input matInput [(ngModel)]="testAuthHeader" [ngModelOptions]="{standalone: true}"
+                     placeholder="Bearer token123">
+              <mat-hint>Will be added as Authorization header</mat-hint>
+            </mat-form-field>
+          </div>
+          
+          <div class="test-actions">
+            <button mat-raised-button color="primary" (click)="testEndpoint()" 
+                    [disabled]="!testBaseUrl || isTestRunning">
+              <mat-icon>play_arrow</mat-icon>
+              {{ isTestRunning ? 'Testing...' : 'Send Request' }}
+            </button>
+            
+            <button mat-button (click)="generateCurlExample()">
+              <mat-icon>code</mat-icon>
+              Update cURL
+            </button>
+            
+            <button mat-button (click)="exportToPostman()">
+              <mat-icon>download</mat-icon>
+              Export to Postman
+            </button>
+          </div>
+          
+          <mat-divider></mat-divider>
+          
+          <div class="curl-section">
+            <h3>cURL Command</h3>
+            <div class="curl-actions">
+              <button mat-icon-button (click)="copyCurl()" matTooltip="Copy to clipboard">
+                <mat-icon>content_copy</mat-icon>
+              </button>
+            </div>
+            <pre class="curl-example">{{ curlExample }}</pre>
+          </div>
+          
+          <div class="test-result" *ngIf="testResult">
+            <mat-divider></mat-divider>
+            
+            <h3>Response</h3>
+            
+            <div class="response-status" [class.success]="testResult.response && testResult.response.status < 400"
+                 [class.error]="(testResult.response && testResult.response.status >= 400) || testResult.error">
+              <span class="status-code" *ngIf="testResult.response">
+                {{ testResult.response.status }} {{ testResult.response.statusText }}
+              </span>
+              <span class="response-time" *ngIf="testResult.response">
+                <mat-icon>schedule</mat-icon>
+                {{ testResult.response.time }}ms
+              </span>
+              <span class="response-size" *ngIf="testResult.response">
+                <mat-icon>data_usage</mat-icon>
+                {{ formatBytes(testResult.response.size) }}
+              </span>
+              <span class="error-message" *ngIf="testResult.error">
+                <mat-icon>error</mat-icon>
+                {{ testResult.error }}
+              </span>
+            </div>
+            
+            <mat-tab-group *ngIf="testResult.response">
+              <mat-tab label="Body">
+                <pre class="response-body">{{ formatResponseBody(testResult.response.body) }}</pre>
+              </mat-tab>
+              <mat-tab label="Headers">
+                <table class="response-headers">
+                  <tr *ngFor="let header of getResponseHeadersAsArray(testResult.response?.headers)">
+                    <td class="header-name">{{ header.key }}:</td>
+                    <td class="header-value">{{ header.value }}</td>
+                  </tr>
+                </table>
+              </mat-tab>
+            </mat-tab-group>
+          </div>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </form>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()">Cancel</button>
+  <button mat-button color="primary" (click)="switchToEdit()" 
+          *ngIf="mode === 'view'">
+    <mat-icon>edit</mat-icon>
+    Edit
+  </button>
+  <button mat-raised-button color="primary" (click)="save()"
+          *ngIf="mode !== 'view'" [disabled]="endpointForm.invalid">
+    Save
+  </button>
+</mat-dialog-actions>

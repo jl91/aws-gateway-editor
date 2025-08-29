@@ -1,0 +1,168 @@
+<div class="new-gateway-container">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Create New API Gateway</mat-card-title>
+      <mat-card-subtitle>Configure your OpenAPI specification</mat-card-subtitle>
+    </mat-card-header>
+    
+    <mat-card-content>
+      <mat-tabs>
+        <!-- Template Selection Tab -->
+        <mat-tab label="Template">
+          <div class="tab-content">
+            <h3>Choose a Template</h3>
+            <div class="template-grid">
+              <mat-card *ngFor="let template of templates" 
+                       class="template-card"
+                       [class.selected]="selectedTemplate === template"
+                       (click)="selectTemplate(template)">
+                <mat-card-content>
+                  <h4>{{ template.name }}</h4>
+                  <p>{{ template.description }}</p>
+                </mat-card-content>
+              </mat-card>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Basic Information Tab -->
+        <mat-tab label="Basic Info">
+          <div class="tab-content">
+            <form [formGroup]="gatewayForm">
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>API Title</mat-label>
+                <input matInput formControlName="title" placeholder="My API Gateway">
+                <mat-error *ngIf="gatewayForm.get('title')?.hasError('required')">
+                  Title is required
+                </mat-error>
+                <mat-error *ngIf="gatewayForm.get('title')?.hasError('minlength')">
+                  Title must be at least 3 characters
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Version</mat-label>
+                <input matInput formControlName="version" placeholder="1.0.0">
+                <mat-error *ngIf="gatewayForm.get('version')?.hasError('pattern')">
+                  Version must follow semantic versioning (e.g., 1.0.0)
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Description</mat-label>
+                <textarea matInput formControlName="description" rows="4"
+                          placeholder="Describe your API..."></textarea>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Terms of Service URL</mat-label>
+                <input matInput formControlName="termsOfService" 
+                       placeholder="https://example.com/terms">
+              </mat-form-field>
+
+              <div formGroupName="license">
+                <h4>License Information</h4>
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>License Name</mat-label>
+                  <input matInput formControlName="name" placeholder="MIT">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>License URL</mat-label>
+                  <input matInput formControlName="url" 
+                         placeholder="https://opensource.org/licenses/MIT">
+                </mat-form-field>
+              </div>
+            </form>
+          </div>
+        </mat-tab>
+
+        <!-- Contact Tab -->
+        <mat-tab label="Contact">
+          <div class="tab-content">
+            <form [formGroup]="contactForm">
+              <h3>Contact Information</h3>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Contact Name</mat-label>
+                <input matInput formControlName="name" placeholder="API Support Team">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Contact Email</mat-label>
+                <input matInput formControlName="email" type="email" 
+                       placeholder="api-support@example.com">
+                <mat-error *ngIf="contactForm.get('email')?.hasError('email')">
+                  Please enter a valid email address
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Contact URL</mat-label>
+                <input matInput formControlName="url" 
+                       placeholder="https://example.com/support">
+              </mat-form-field>
+            </form>
+          </div>
+        </mat-tab>
+
+        <!-- Server Configuration Tab -->
+        <mat-tab label="Server">
+          <div class="tab-content">
+            <form [formGroup]="serverForm">
+              <h3>Server Configuration</h3>
+              
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Server URL</mat-label>
+                <input matInput formControlName="url" 
+                       placeholder="https://api.example.com">
+                <mat-error *ngIf="serverForm.get('url')?.hasError('required')">
+                  Server URL is required
+                </mat-error>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>Server Description</mat-label>
+                <input matInput formControlName="description" 
+                       placeholder="Production server">
+              </mat-form-field>
+            </form>
+          </div>
+        </mat-tab>
+
+        <!-- Preview Tab -->
+        <mat-tab label="Preview">
+          <div class="tab-content">
+            <div class="format-selection">
+              <mat-radio-group [(ngModel)]="fileFormat" (change)="generatePreview()">
+                <mat-radio-button value="yaml">YAML</mat-radio-button>
+                <mat-radio-button value="json">JSON</mat-radio-button>
+              </mat-radio-group>
+              <button mat-button color="primary" (click)="generatePreview()">
+                <mat-icon>refresh</mat-icon>
+                Refresh Preview
+              </button>
+            </div>
+            
+            <div class="preview-container" *ngIf="showPreview">
+              <monaco-editor
+                [value]="previewContent"
+                [language]="fileFormat"
+                [readOnly]="true">
+              </monaco-editor>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tabs>
+    </mat-card-content>
+
+    <mat-card-actions align="end">
+      <button mat-button (click)="cancel()">Cancel</button>
+      <button mat-raised-button color="primary" 
+              [disabled]="gatewayForm.invalid"
+              (click)="createGateway()">
+        Create Gateway
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</div>

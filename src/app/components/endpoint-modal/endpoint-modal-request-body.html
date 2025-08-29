@@ -1,0 +1,374 @@
+<!-- Enhanced Request Body Tab -->
+<mat-tab label="Request Body" [matBadge]="hasRequestBody() ? '1' : ''" matBadgeColor="accent"
+         [matBadgeHidden]="!hasRequestBody()">
+  <div class="tab-content" formGroupName="requestBody">
+    
+    <!-- Request Body Header -->
+    <div class="request-body-header">
+      <mat-slide-toggle formControlName="enabled" (change)="onRequestBodyToggle($event)">
+        Enable Request Body
+      </mat-slide-toggle>
+      
+      <mat-checkbox formControlName="required" [disabled]="!endpointForm.get('requestBody.enabled')?.value">
+        Required
+      </mat-checkbox>
+    </div>
+    
+    <div class="request-body-content" *ngIf="endpointForm.get('requestBody.enabled')?.value">
+      
+      <!-- Description -->
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Description</mat-label>
+        <textarea matInput formControlName="description" rows="2"
+                  placeholder="Describe the request body content"></textarea>
+        <mat-hint>Explain what data this endpoint expects</mat-hint>
+      </mat-form-field>
+      
+      <!-- Content Types -->
+      <div class="content-types-section">
+        <h4>Content Types</h4>
+        <mat-chip-listbox formControlName="contentTypes" multiple aria-label="Content types">
+          <mat-chip-option *ngFor="let type of availableContentTypes" [value]="type"
+                           [selected]="isContentTypeSelected(type)">
+            <mat-icon *ngIf="type === 'application/json'">code</mat-icon>
+            <mat-icon *ngIf="type === 'application/xml'">code</mat-icon>
+            <mat-icon *ngIf="type === 'multipart/form-data'">attach_file</mat-icon>
+            <mat-icon *ngIf="type === 'application/x-www-form-urlencoded'">text_fields</mat-icon>
+            <mat-icon *ngIf="type === 'text/plain'">description</mat-icon>
+            {{ type }}
+          </mat-chip-option>
+        </mat-chip-listbox>
+        
+        <mat-form-field appearance="outline" class="custom-content-type">
+          <mat-label>Custom Content Type</mat-label>
+          <input matInput #customContentType placeholder="application/custom+json">
+          <button mat-icon-button matSuffix (click)="addCustomContentType(customContentType.value)">
+            <mat-icon>add</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+      
+      <!-- Schema Templates -->
+      <div class="schema-templates" *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/json')">
+        <h4>
+          Schema Templates
+          <button mat-icon-button [matMenuTriggerFor]="schemaMenu" matTooltip="Use template">
+            <mat-icon>inventory_2</mat-icon>
+          </button>
+        </h4>
+        
+        <mat-menu #schemaMenu="matMenu">
+          <button mat-menu-item (click)="applySchemaTemplate('user')">
+            <mat-icon>person</mat-icon>
+            User Object
+          </button>
+          <button mat-menu-item (click)="applySchemaTemplate('product')">
+            <mat-icon>shopping_cart</mat-icon>
+            Product Object
+          </button>
+          <button mat-menu-item (click)="applySchemaTemplate('order')">
+            <mat-icon>receipt</mat-icon>
+            Order Object
+          </button>
+          <button mat-menu-item (click)="applySchemaTemplate('pagination')">
+            <mat-icon>view_list</mat-icon>
+            Paginated List
+          </button>
+          <button mat-menu-item (click)="applySchemaTemplate('error')">
+            <mat-icon>error</mat-icon>
+            Error Response
+          </button>
+          <button mat-menu-item (click)="applySchemaTemplate('custom')">
+            <mat-icon>edit</mat-icon>
+            Custom Schema
+          </button>
+        </mat-menu>
+      </div>
+      
+      <!-- Tab Group for Different Content Types -->
+      <mat-tab-group *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.length > 0">
+        
+        <!-- JSON Content Type -->
+        <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/json')"
+                 label="JSON">
+          <div class="content-type-content">
+            
+            <!-- Schema Editor with Toolbar -->
+            <div class="editor-section">
+              <div class="editor-header">
+                <h4>JSON Schema</h4>
+                <div class="editor-actions">
+                  <button mat-icon-button (click)="validateSchema()" matTooltip="Validate schema">
+                    <mat-icon>check_circle</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="formatSchema()" matTooltip="Format JSON">
+                    <mat-icon>format_align_left</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="generateSchemaFromExample()" 
+                          matTooltip="Generate from example">
+                    <mat-icon>auto_fix_high</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="uploadSchema()" matTooltip="Upload schema file">
+                    <mat-icon>upload_file</mat-icon>
+                  </button>
+                </div>
+              </div>
+              
+              <monaco-editor
+                [value]="getContentSchema('application/json')"
+                (valueChange)="updateContentSchema('application/json', $event)"
+                [language]="'json'"
+                [readOnly]="mode === 'view'"
+                [options]="{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  fontSize: 13,
+                  suggestOnTriggerCharacters: true,
+                  quickSuggestions: true
+                }"
+                style="height: 250px;">
+              </monaco-editor>
+              
+              <mat-error *ngIf="schemaValidationError" class="schema-error">
+                {{ schemaValidationError }}
+              </mat-error>
+            </div>
+            
+            <!-- Example Editor -->
+            <div class="editor-section">
+              <div class="editor-header">
+                <h4>Example</h4>
+                <div class="editor-actions">
+                  <button mat-icon-button (click)="generateExampleFromSchema()" 
+                          matTooltip="Generate from schema">
+                    <mat-icon>auto_awesome</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="validateExample()" 
+                          matTooltip="Validate against schema">
+                    <mat-icon>fact_check</mat-icon>
+                  </button>
+                  <button mat-icon-button (click)="formatExample()" matTooltip="Format JSON">
+                    <mat-icon>format_align_left</mat-icon>
+                  </button>
+                </div>
+              </div>
+              
+              <monaco-editor
+                [value]="getContentExample('application/json')"
+                (valueChange)="updateContentExample('application/json', $event)"
+                [language]="'json'"
+                [readOnly]="mode === 'view'"
+                [options]="{
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  wordWrap: 'on',
+                  fontSize: 13
+                }"
+                style="height: 200px;">
+              </monaco-editor>
+              
+              <mat-error *ngIf="exampleValidationError" class="example-error">
+                {{ exampleValidationError }}
+              </mat-error>
+            </div>
+            
+            <!-- Schema Preview -->
+            <div class="schema-preview">
+              <h4>
+                Schema Preview
+                <button mat-icon-button (click)="toggleSchemaPreview()">
+                  <mat-icon>{{ showSchemaPreview ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
+              </h4>
+              
+              <div class="preview-content" *ngIf="showSchemaPreview">
+                <div class="schema-tree">
+                  <ng-container *ngFor="let property of schemaProperties">
+                    <div class="property-item">
+                      <span class="property-name">{{ property.name }}</span>
+                      <mat-chip class="property-type">{{ property.type }}</mat-chip>
+                      <mat-chip class="property-required" *ngIf="property.required">Required</mat-chip>
+                      <span class="property-description">{{ property.description }}</span>
+                    </div>
+                  </ng-container>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- XML Content Type -->
+        <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/xml')"
+                 label="XML">
+          <div class="content-type-content">
+            <div class="editor-section">
+              <h4>XML Schema (XSD)</h4>
+              <monaco-editor
+                [value]="getContentSchema('application/xml')"
+                (valueChange)="updateContentSchema('application/xml', $event)"
+                [language]="'xml'"
+                [readOnly]="mode === 'view'"
+                style="height: 250px;">
+              </monaco-editor>
+            </div>
+            
+            <div class="editor-section">
+              <h4>XML Example</h4>
+              <monaco-editor
+                [value]="getContentExample('application/xml')"
+                (valueChange)="updateContentExample('application/xml', $event)"
+                [language]="'xml'"
+                [readOnly]="mode === 'view'"
+                style="height: 200px;">
+              </monaco-editor>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- Form Data Content Type -->
+        <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('multipart/form-data')"
+                 label="Form Data">
+          <div class="content-type-content">
+            <div class="form-fields-section">
+              <h4>Form Fields</h4>
+              
+              <button mat-raised-button color="primary" (click)="addFormField()" *ngIf="mode !== 'view'">
+                <mat-icon>add</mat-icon>
+                Add Field
+              </button>
+              
+              <div class="form-fields-list">
+                <mat-expansion-panel *ngFor="let field of formFields; let i = index" class="form-field-panel">
+                  <mat-expansion-panel-header>
+                    <mat-panel-title>
+                      {{ field.name || 'New Field' }}
+                    </mat-panel-title>
+                    <mat-panel-description>
+                      {{ field.type }} {{ field.required ? '(Required)' : '' }}
+                    </mat-panel-description>
+                  </mat-expansion-panel-header>
+                  
+                  <div class="form-row">
+                    <mat-form-field appearance="outline" class="third-width">
+                      <mat-label>Field Name</mat-label>
+                      <input matInput [(ngModel)]="field.name" [ngModelOptions]="{standalone: true}">
+                    </mat-form-field>
+                    
+                    <mat-form-field appearance="outline" class="third-width">
+                      <mat-label>Field Type</mat-label>
+                      <mat-select [(ngModel)]="field.type" [ngModelOptions]="{standalone: true}">
+                        <mat-option value="string">String</mat-option>
+                        <mat-option value="number">Number</mat-option>
+                        <mat-option value="boolean">Boolean</mat-option>
+                        <mat-option value="file">File</mat-option>
+                        <mat-option value="array">Array</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    
+                    <mat-checkbox [(ngModel)]="field.required" [ngModelOptions]="{standalone: true}"
+                                  class="third-width">
+                      Required
+                    </mat-checkbox>
+                  </div>
+                  
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Description</mat-label>
+                    <textarea matInput [(ngModel)]="field.description" [ngModelOptions]="{standalone: true}"
+                              rows="2"></textarea>
+                  </mat-form-field>
+                  
+                  <div class="form-row" *ngIf="field.type === 'file'">
+                    <mat-form-field appearance="outline" class="half-width">
+                      <mat-label>Accept Types</mat-label>
+                      <input matInput [(ngModel)]="field.accept" [ngModelOptions]="{standalone: true}"
+                             placeholder="image/*, .pdf, .doc">
+                    </mat-form-field>
+                    
+                    <mat-form-field appearance="outline" class="half-width">
+                      <mat-label>Max Size (MB)</mat-label>
+                      <input matInput type="number" [(ngModel)]="field.maxSize" 
+                             [ngModelOptions]="{standalone: true}">
+                    </mat-form-field>
+                  </div>
+                  
+                  <button mat-icon-button color="warn" (click)="removeFormField(i)" *ngIf="mode !== 'view'">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </mat-expansion-panel>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- URL Encoded Content Type -->
+        <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('application/x-www-form-urlencoded')"
+                 label="URL Encoded">
+          <div class="content-type-content">
+            <div class="url-encoded-section">
+              <h4>URL Encoded Parameters</h4>
+              
+              <button mat-raised-button color="primary" (click)="addUrlEncodedParam()" *ngIf="mode !== 'view'">
+                <mat-icon>add</mat-icon>
+                Add Parameter
+              </button>
+              
+              <div class="url-params-list">
+                <div class="url-param-item" *ngFor="let param of urlEncodedParams; let i = index">
+                  <mat-form-field appearance="outline" class="param-name">
+                    <mat-label>Name</mat-label>
+                    <input matInput [(ngModel)]="param.name" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  
+                  <mat-form-field appearance="outline" class="param-value">
+                    <mat-label>Example Value</mat-label>
+                    <input matInput [(ngModel)]="param.value" [ngModelOptions]="{standalone: true}">
+                  </mat-form-field>
+                  
+                  <mat-checkbox [(ngModel)]="param.required" [ngModelOptions]="{standalone: true}">
+                    Required
+                  </mat-checkbox>
+                  
+                  <button mat-icon-button color="warn" (click)="removeUrlEncodedParam(i)" *ngIf="mode !== 'view'">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </mat-tab>
+        
+        <!-- Plain Text Content Type -->
+        <mat-tab *ngIf="endpointForm.get('requestBody.contentTypes')?.value?.includes('text/plain')"
+                 label="Plain Text">
+          <div class="content-type-content">
+            <div class="editor-section">
+              <h4>Text Content Example</h4>
+              <monaco-editor
+                [value]="getContentExample('text/plain')"
+                (valueChange)="updateContentExample('text/plain', $event)"
+                [language]="'plaintext'"
+                [readOnly]="mode === 'view'"
+                style="height: 300px;">
+              </monaco-editor>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+      
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="!endpointForm.get('requestBody.contentTypes')?.value?.length">
+        <mat-icon>inbox</mat-icon>
+        <p>No content types selected</p>
+        <p class="hint">Select one or more content types above</p>
+      </div>
+    </div>
+    
+    <!-- Disabled State -->
+    <div class="disabled-state" *ngIf="!endpointForm.get('requestBody.enabled')?.value">
+      <mat-icon>block</mat-icon>
+      <p>Request body is disabled</p>
+      <p class="hint">Enable request body to configure content</p>
+    </div>
+  </div>
+</mat-tab>

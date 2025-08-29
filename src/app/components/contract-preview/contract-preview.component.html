@@ -1,0 +1,148 @@
+<h1 mat-dialog-title class="dialog-header">
+  <div class="title-content">
+    <mat-icon>code</mat-icon>
+    <span>OpenAPI Contract Preview</span>
+    <span class="badge" *ngIf="hasChanges">Modified</span>
+  </div>
+  <div class="dialog-actions">
+    <mat-button-toggle-group [(ngModel)]="format" (change)="onFormatChange()">
+      <mat-button-toggle value="yaml">YAML</mat-button-toggle>
+      <mat-button-toggle value="json">JSON</mat-button-toggle>
+    </mat-button-toggle-group>
+    <button mat-icon-button (click)="toggleFullscreen()" matTooltip="Toggle Fullscreen">
+      <mat-icon>{{ fullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+    </button>
+    <button mat-icon-button (click)="close()" matTooltip="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+</h1>
+
+<mat-dialog-content class="preview-content" [class.fullscreen]="fullscreen">
+  <!-- Toolbar -->
+  <div class="preview-toolbar">
+    <div class="toolbar-section">
+      <button mat-stroked-button (click)="validateContract()" [disabled]="data.readOnly">
+        <mat-icon>check_circle</mat-icon>
+        Validate
+      </button>
+      <button mat-stroked-button (click)="formatDocument()" [disabled]="data.readOnly">
+        <mat-icon>format_align_left</mat-icon>
+        Format
+      </button>
+      <button mat-stroked-button (click)="toggleDiff()" 
+              [disabled]="!data.originalDocument"
+              [class.active]="showDiff">
+        <mat-icon>difference</mat-icon>
+        Diff
+      </button>
+    </div>
+    
+    <div class="toolbar-section search-section">
+      <mat-form-field appearance="outline" class="search-field">
+        <mat-label>Search</mat-label>
+        <input matInput [(ngModel)]="searchTerm" 
+               (keyup.enter)="findInDocument()"
+               placeholder="Find in document...">
+        <mat-icon matSuffix (click)="findInDocument()">search</mat-icon>
+      </mat-form-field>
+    </div>
+    
+    <div class="toolbar-section">
+      <button mat-stroked-button (click)="copyToClipboard()">
+        <mat-icon>content_copy</mat-icon>
+        Copy
+      </button>
+      <button mat-stroked-button (click)="downloadContract()">
+        <mat-icon>download</mat-icon>
+        Download
+      </button>
+    </div>
+  </div>
+  
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-item">
+      <mat-icon>description</mat-icon>
+      <span>{{ format.toUpperCase() }}</span>
+    </div>
+    <div class="status-item">
+      <mat-icon>format_list_numbered</mat-icon>
+      <span>{{ lineCount }} lines</span>
+    </div>
+    <div class="status-item" *ngIf="selectedText">
+      <mat-icon>select_all</mat-icon>
+      <span>{{ selectedText.length }} chars selected</span>
+    </div>
+    <div class="status-item">
+      <mat-icon>place</mat-icon>
+      <span>Ln {{ cursorPosition.line }}, Col {{ cursorPosition.column }}</span>
+    </div>
+    <div class="status-item" *ngIf="hasChanges">
+      <mat-icon class="warning-icon">warning</mat-icon>
+      <span>Unsaved changes</span>
+    </div>
+  </div>
+  
+  <!-- Editor Container -->
+  <div class="editor-container" [class.diff-mode]="showDiff">
+    <div class="editor-wrapper" *ngIf="!showDiff">
+      <code-editor
+        [value]="content"
+        [language]="format"
+        [readOnly]="data.readOnly || false"
+        [height]="'100%'"
+        [showHeader]="false"
+        (valueChange)="onContentChange($event)"
+        style="height: 100%;">
+      </code-editor>
+    </div>
+    
+    <!-- Diff View -->
+    <div class="diff-container" *ngIf="showDiff">
+      <div class="diff-pane original">
+        <div class="diff-header">
+          <mat-icon>history</mat-icon>
+          <span>Original</span>
+        </div>
+        <code-editor
+          [value]="originalContent"
+          [language]="format"
+          [readOnly]="true"
+          [height]="'calc(100% - 40px)'"
+          [showHeader]="false"
+          style="height: calc(100% - 40px);">
+        </code-editor>
+      </div>
+      
+      <div class="diff-pane current">
+        <div class="diff-header">
+          <mat-icon>edit</mat-icon>
+          <span>Current</span>
+          <span class="badge" *ngIf="hasChanges">Modified</span>
+        </div>
+        <code-editor
+          [value]="content"
+          [language]="format"
+          [readOnly]="data.readOnly || false"
+          [height]="'calc(100% - 40px)'"
+          [showHeader]="false"
+          (valueChange)="onContentChange($event)"
+          style="height: calc(100% - 40px);">
+        </code-editor>
+      </div>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">
+    {{ hasChanges && !data.readOnly ? 'Cancel' : 'Close' }}
+  </button>
+  <button mat-raised-button color="primary" 
+          (click)="saveChanges()" 
+          [disabled]="!hasChanges || data.readOnly">
+    <mat-icon>save</mat-icon>
+    Save Changes
+  </button>
+</mat-dialog-actions>

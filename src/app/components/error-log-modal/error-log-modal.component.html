@@ -1,0 +1,157 @@
+<h2 mat-dialog-title>
+  <mat-icon>bug_report</mat-icon>
+  Error Logs
+</h2>
+
+<mat-dialog-content>
+  <div class="log-stats">
+    <div class="stat-card error" *ngIf="errorCount > 0">
+      <mat-icon>error</mat-icon>
+      <span class="count">{{ errorCount }}</span>
+      <span class="label">Errors</span>
+    </div>
+    <div class="stat-card warning" *ngIf="warningCount > 0">
+      <mat-icon>warning</mat-icon>
+      <span class="count">{{ warningCount }}</span>
+      <span class="label">Warnings</span>
+    </div>
+    <div class="stat-card info" *ngIf="infoCount > 0">
+      <mat-icon>info</mat-icon>
+      <span class="count">{{ infoCount }}</span>
+      <span class="label">Info</span>
+    </div>
+  </div>
+
+  <mat-tab-group (selectedTabChange)="onTabChange($event.index)" [selectedIndex]="selectedTab">
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <span [matBadge]="errorLogs.length" matBadgeOverlap="false" [matBadgeHidden]="errorLogs.length === 0">
+          All Logs
+        </span>
+      </ng-template>
+      
+      <div class="logs-container">
+        <ng-container *ngTemplateOutlet="logsTable; context: { logs: filteredLogs }"></ng-container>
+      </div>
+    </mat-tab>
+
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <span [matBadge]="errorCount" matBadgeOverlap="false" [matBadgeHidden]="errorCount === 0" matBadgeColor="warn">
+          Errors
+        </span>
+      </ng-template>
+      
+      <div class="logs-container">
+        <ng-container *ngTemplateOutlet="logsTable; context: { logs: filteredLogs }"></ng-container>
+      </div>
+    </mat-tab>
+
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <span [matBadge]="warningCount" matBadgeOverlap="false" [matBadgeHidden]="warningCount === 0" matBadgeColor="accent">
+          Warnings
+        </span>
+      </ng-template>
+      
+      <div class="logs-container">
+        <ng-container *ngTemplateOutlet="logsTable; context: { logs: filteredLogs }"></ng-container>
+      </div>
+    </mat-tab>
+
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <span [matBadge]="infoCount" matBadgeOverlap="false" [matBadgeHidden]="infoCount === 0">
+          Info
+        </span>
+      </ng-template>
+      
+      <div class="logs-container">
+        <ng-container *ngTemplateOutlet="logsTable; context: { logs: filteredLogs }"></ng-container>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+
+  <ng-template #logsTable let-logs="logs">
+    <div *ngIf="logs.length === 0" class="empty-state">
+      <mat-icon>check_circle</mat-icon>
+      <p>No logs to display</p>
+    </div>
+
+    <mat-accordion *ngIf="logs.length > 0" class="logs-accordion">
+      <mat-expansion-panel *ngFor="let log of logs" [class.error-panel]="log.severity === 'error'"
+                           [class.warning-panel]="log.severity === 'warning'"
+                           [class.info-panel]="log.severity === 'info'">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <div class="log-header">
+              <mat-icon [style.color]="getSeverityColor(log.severity)">
+                {{ getSeverityIcon(log.severity) }}
+              </mat-icon>
+              <span class="log-message">{{ log.message }}</span>
+            </div>
+          </mat-panel-title>
+          <mat-panel-description>
+            <div class="log-meta">
+              <mat-chip-listbox class="chip-list">
+                <mat-chip [style.background-color]="getSourceColor(log.source) + '20'"
+                         [style.color]="getSourceColor(log.source)">
+                  {{ getSourceLabel(log.source) }}
+                </mat-chip>
+              </mat-chip-listbox>
+              <span class="timestamp">{{ formatTimestamp(log.timestamp) }}</span>
+            </div>
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="log-details">
+          <div class="detail-row" *ngIf="log.details">
+            <strong>Details:</strong>
+            <p>{{ log.details }}</p>
+          </div>
+
+          <div class="detail-row" *ngIf="log.filePath">
+            <strong>File:</strong>
+            <code>{{ log.filePath }}</code>
+          </div>
+
+          <div class="detail-row" *ngIf="log.context">
+            <strong>Context:</strong>
+            <pre>{{ log.context | json }}</pre>
+          </div>
+
+          <div class="detail-row" *ngIf="log.stack">
+            <strong>Stack Trace:</strong>
+            <pre class="stack-trace">{{ log.stack }}</pre>
+          </div>
+
+          <div class="log-actions">
+            <button mat-button (click)="copyLogDetails(log)">
+              <mat-icon>content_copy</mat-icon>
+              Copy Details
+            </button>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </mat-accordion>
+  </ng-template>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button [matMenuTriggerFor]="menu" class="actions-button">
+    <mat-icon>more_vert</mat-icon>
+    Actions
+  </button>
+  <mat-menu #menu="matMenu">
+    <button mat-menu-item (click)="exportLogs()">
+      <mat-icon>download</mat-icon>
+      Export Logs
+    </button>
+    <button mat-menu-item (click)="clearAllLogs()" [disabled]="errorLogs.length === 0">
+      <mat-icon>delete</mat-icon>
+      Clear All Logs
+    </button>
+  </mat-menu>
+  
+  <button mat-button (click)="close()">Close</button>
+</mat-dialog-actions>
