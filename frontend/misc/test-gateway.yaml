@@ -32,7 +32,7 @@ paths:
       tags:
         - Users
       parameters:
-        - &ref_6
+        - &ref_5
           name: page
           in: query
           description: Page number
@@ -40,7 +40,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-        - &ref_7
+        - &ref_6
           name: limit
           in: query
           description: Items per page
@@ -97,7 +97,7 @@ paths:
                         metadata:
                           type: object
                           additionalProperties: true
-                  pagination: &ref_4
+                  pagination: &ref_2
                     type: object
                     properties:
                       page:
@@ -108,7 +108,7 @@ paths:
                         type: integer
                       totalPages:
                         type: integer
-        "400": &ref_2
+        "400": &ref_3
           description: Bad request
           content:
             application/json:
@@ -131,7 +131,7 @@ paths:
               example:
                 code: BAD_REQUEST
                 message: Invalid request parameters
-        "401": &ref_5
+        "401": &ref_4
           description: Authentication required
           content:
             application/json:
@@ -150,59 +150,116 @@ paths:
       description: Creates a new user account in the system
       tags:
         - Users
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: &ref_3
-              type: object
-              required:
-                - email
-                - name
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                name:
-                  type: string
-                password:
-                  type: string
-                  format: password
-                  minLength: 8
-                role:
-                  type: string
-                  enum:
-                    - admin
-                    - user
-                    - guest
-                  default: user
+      parameters: []
       responses:
         "201":
           description: User created successfully
           content:
             application/json:
-              schema: *ref_1
-        "400": *ref_2
+              schema:
+                type: object
+                required:
+                  - id
+                  - email
+                  - name
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                    format: email
+                  name:
+                    type: string
+                    minLength: 1
+                    maxLength: 100
+                  role:
+                    type: string
+                    enum:
+                      - admin
+                      - user
+                      - guest
+                  status:
+                    type: string
+                    enum:
+                      - active
+                      - inactive
+                      - suspended
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+                  metadata:
+                    type: object
+                    additionalProperties: true
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - code
+                  - message
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: object
+                    additionalProperties: true
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                code: BAD_REQUEST
+                message: Invalid request parameters
         "409":
           description: User already exists
           content:
             application/json:
-              schema: *ref_0
-      security:
-        - apiKey: []
-        - bearerAuth: []
+              schema:
+                type: object
+                required:
+                  - code
+                  - message
+                properties:
+                  code:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: object
+                    additionalProperties: true
+                  timestamp:
+                    type: string
+                    format: date-time
       x-amazon-apigateway-integration:
-        type: aws_proxy
+        type: AWS
+        uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions//invocations
         httpMethod: POST
-        uri: arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789:function:createUser/invocations
-  /teste2/:
+        timeoutInMillis: 29000
+      x-amazon-apigateway-logging:
+        level: "OFF"
+        dataTrace: false
+        metricsEnabled: false
+        customMetrics: []
+  /resource/{id}/testeds:
     get:
-      operationId: get-test-2
+      operationId: hkjhkjhj
       summary: ""
       description: ""
       tags: []
-      parameters: []
+      parameters:
+        - name: id
+          in: path
+          description: "Path parameter: id"
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: Success
@@ -214,15 +271,37 @@ paths:
 components:
   schemas:
     User: *ref_1
-    CreateUserRequest: *ref_3
-    Pagination: *ref_4
+    CreateUserRequest:
+      type: object
+      required:
+        - email
+        - name
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          type: string
+          enum:
+            - admin
+            - user
+            - guest
+          default: user
+    Pagination: *ref_2
     Error: *ref_0
   responses:
-    BadRequest: *ref_2
-    Unauthorized: *ref_5
+    BadRequest: *ref_3
+    Unauthorized: *ref_4
   parameters:
-    PageParam: *ref_6
-    LimitParam: *ref_7
+    PageParam: *ref_5
+    LimitParam: *ref_6
   securitySchemes:
     apiKey:
       type: apiKey

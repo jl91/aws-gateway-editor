@@ -51,7 +51,7 @@ This test gateway helps verify:
 
 - **ID:** listUsers
 - **Summary:** List all users
-- **Modified:** 2025-08-27T23:46:37.346Z
+- **Modified:** 2025-08-29T20:34:18.987Z
 
 ```bash
 curl -X GET 'https://api.example.com/users' \
@@ -64,10 +64,23 @@ curl -X GET 'https://api.example.com/users' \
 
 - **ID:** createUser
 - **Summary:** Create a new user
-- **Modified:** 2025-08-27T23:46:37.346Z
+- **Modified:** 2025-08-29T20:34:18.987Z
 
 ```bash
 curl -X POST 'https://api.example.com/users' \
+  -H 'Accept: application/json'
+```
+
+---
+
+### GET /resource/{id}/testeds
+
+- **ID:** hkjhkjhj
+- **Summary:** No summary provided
+- **Modified:** 2025-08-29T20:34:18.987Z
+
+```bash
+curl -X GET 'https://api.example.com/resource/{id}/testeds' \
   -H 'Accept: application/json'
 ```
 

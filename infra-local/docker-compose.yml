@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gateway-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gateway_db}
+      POSTGRES_USER: ${DB_USER:-gateway_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gateway_pass}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      TZ: UTC
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gateway_user} -d ${DB_NAME:-gateway_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gateway-network
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.dev
+    container_name: gateway-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${BACKEND_PORT:-3000}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-gateway_db}
+      DB_USER: ${DB_USER:-gateway_user}
+      DB_PASSWORD: ${DB_PASSWORD:-gateway_pass}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4200}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-104857600}
+      CACHE_TTL: ${CACHE_TTL:-3600}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gateway-network
+    command: npm run start:dev
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: gateway-frontend
+    restart: unless-stopped
+    environment:
+      API_URL: ${API_URL:-http://localhost:3000}
+    ports:
+      - "${FRONTEND_PORT:-4200}:4200"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - gateway-network
+    command: npm run start
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads:
+    driver: local
+
+networks:
+  gateway-network:
+    driver: bridge
