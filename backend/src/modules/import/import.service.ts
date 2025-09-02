@@ -3,12 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GatewayConfig, GatewayEndpoint, ImportHistory, ImportStatus } from '../../shared/entities';
 import { GatewayService } from '../gateway/gateway.service';
-import * as AdmZip from 'adm-zip';
+import AdmZip from 'adm-zip';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as crypto from 'crypto';
-const SwaggerParser = require('@apidevtools/swagger-parser');
+import SwaggerParser from '@apidevtools/swagger-parser';
 
 @Injectable()
 export class ImportService {
@@ -161,22 +161,23 @@ export class ImportService {
     for (const [pathStr, pathItem] of Object.entries(spec.paths || {})) {
       for (const [method, operation] of Object.entries(pathItem as any)) {
         if (['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(method)) {
+          const op = operation as any;
           const endpoint = this.gatewayEndpointRepo.create({
             config,
             sequenceOrder,
             method: method.toUpperCase(),
             path: pathStr,
-            operationId: operation.operationId,
-            summary: operation.summary,
-            description: operation.description,
-            tags: operation.tags,
-            requestBody: operation.requestBody,
-            responses: operation.responses,
-            security: operation.security,
-            pathParams: this.extractParameters(operation.parameters, 'path'),
-            queryParams: this.extractParameters(operation.parameters, 'query'),
-            headers: this.extractParameters(operation.parameters, 'header'),
-            xExtensions: this.extractExtensions(operation),
+            operationId: op.operationId,
+            summary: op.summary,
+            description: op.description,
+            tags: op.tags,
+            requestBody: op.requestBody,
+            responses: op.responses,
+            security: op.security,
+            pathParams: this.extractParameters(op.parameters, 'path'),
+            queryParams: this.extractParameters(op.parameters, 'query'),
+            headers: this.extractParameters(op.parameters, 'header'),
+            xExtensions: this.extractExtensions(op),
           });
 
           endpoints.push(endpoint);

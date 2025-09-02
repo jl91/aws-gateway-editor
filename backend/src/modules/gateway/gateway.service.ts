@@ -14,7 +14,6 @@ export class GatewayService {
 
   async findAll(page = 1, limit = 10) {
     const [configs, total] = await this.gatewayConfigRepo.findAndCount({
-      where: { deletedAt: null },
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -31,7 +30,7 @@ export class GatewayService {
 
   async findOne(id: string): Promise<GatewayConfig> {
     const config = await this.gatewayConfigRepo.findOne({
-      where: { id, deletedAt: null },
+      where: { id },
       relations: ['endpoints'],
     });
 
@@ -90,7 +89,7 @@ export class GatewayService {
   async activate(id: string): Promise<GatewayConfig> {
     // Deactivate all other configurations
     await this.gatewayConfigRepo.update(
-      { deletedAt: null },
+      {},
       { isActive: false },
     );
 

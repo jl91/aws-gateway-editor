@@ -115,7 +115,7 @@ export class HomeComponent implements OnInit {
       );
       
       // First try to find files with common OpenAPI names
-      let openApiFile = openApiFiles.find(file => {
+      let openApiFile = openApiFiles.find((file: string) => {
         const fileName = file.toLowerCase();
         return fileName.includes('openapi') || 
                fileName.includes('swagger') ||

@@ -1,26 +1,54 @@
-import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
+import { Component, OnInit } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, FormArray, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatStepper, MatStepperModule } from '@angular/material/stepper';
 import { MatCardModule } from '@angular/material/card';
+import { MatTabsModule } from '@angular/material/tabs';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
-import { MatSelectModule } from '@angular/material/select';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatTabsModule } from '@angular/material/tabs';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatRadioModule } from '@angular/material/radio';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { OpenApiService, OpenAPIDocument } from '../../core/services/openapi.service';
-import { ElectronService } from '../../core/services/electron.service';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { ConfirmDialogComponent } from '../../components/confirm-dialog/confirm-dialog.component';
 import { MonacoEditorComponent } from '../../shared/components/monaco-editor/monaco-editor.component';
+import { ApiService } from '../../core/services/api.service';
+import { OpenApiService, Project, OpenAPIDocument } from '../../core/services/openapi.service';
+import * as yaml from 'js-yaml';
 
-interface GatewayTemplate {
+interface SecurityScheme {
+  type: 'http' | 'apiKey' | 'oauth2' | 'openIdConnect';
+  scheme?: string;
+  bearerFormat?: string;
+  name?: string;
+  in?: 'header' | 'query' | 'cookie';
+  flows?: any;
+  openIdConnectUrl?: string;
+  description?: string;
+}
+
+interface Server {
+  url: string;
+  description?: string;
+  variables?: {
+    [key: string]: {
+      default: string;
+      description?: string;
+      enum?: string[];
+    }
+  };
+}
+
+interface Tag {
   name: string;
-  description: string;
-  template: Partial<OpenAPIDocument>;
+  description?: string;
+  externalDocs?: {
+    description?: string;
+    url: string;
+  };
 }
 
 @Component({
@@ -31,19 +59,17 @@ interface GatewayTemplate {
     ReactiveFormsModule,
     FormsModule,
     MatCardModule,
+    MatTabsModule,
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
-    MatSelectModule,
-    MatCheckboxModule,
-    MatTabsModule,
     MatIconModule,
-    MatChipsModule,
     MatRadioModule,
+    MatStepperModule,
     MatSnackBarModule,
+    MatDialogModule,
     MonacoEditorComponent
   ],
-  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   templateUrl: './new-gateway.component.html',
   styleUrls: ['./new-gateway.component.scss']
 })
@@ -52,76 +78,104 @@ export class NewGatewayComponent implements OnInit {
   contactForm: FormGroup;
   serverForm: FormGroup;
   
+  // UI State
+  isLinear = true;
   fileFormat: 'yaml' | 'json' = 'yaml';
-  previewContent = '';
-  showPreview = false;
-  
-  templates: GatewayTemplate[] = [
+  selectedSecurityType: 'http' | 'apiKey' | 'oauth2' | 'openIdConnect' = 'http';
+  selectedTemplate: any = null;
+  previewContent: string = '';
+  templates: any[] = [
     {
-      name: 'Basic REST API',
-      description: 'Simple REST API with CRUD operations',
-      template: {
-        openapi: '3.0.3',
-        info: {
-          title: 'REST API',
-          version: '1.0.0',
-          description: 'A simple REST API'
-        },
-        paths: {}
-      }
+      id: 'basic',
+      name: 'Basic API',
+      description: 'Simple REST API with basic operations',
+      icon: 'api'
     },
     {
-      name: 'Microservice API',
-      description: 'Microservice with authentication and monitoring',
-      template: {
-        openapi: '3.0.3',
-        info: {
-          title: 'Microservice API',
-          version: '1.0.0',
-          description: 'Microservice API with authentication'
-        },
-        security: [{ bearerAuth: [] }],
-        components: {
-          securitySchemes: {
-            bearerAuth: {
-              type: 'http',
-              scheme: 'bearer',
-              bearerFormat: 'JWT'
-            }
-          }
-        },
-        paths: {}
-      }
+      id: 'microservice',
+      name: 'Microservice',
+      description: 'Microservice pattern with health checks',
+      icon: 'cloud'
     },
     {
-      name: 'AWS API Gateway',
-      description: 'AWS API Gateway with Lambda integration',
-      template: {
-        openapi: '3.0.3',
-        info: {
-          title: 'AWS API Gateway',
-          version: '1.0.0',
-          description: 'API Gateway with AWS integrations'
-        },
-        'x-amazon-apigateway-request-validators': {
-          all: {
-            validateRequestBody: true,
-            validateRequestParameters: true
-          }
-        },
-        paths: {}
-      }
+      id: 'crud',
+      name: 'CRUD API',
+      description: 'Complete CRUD operations for a resource',
+      icon: 'storage'
     }
   ];
   
-  selectedTemplate: GatewayTemplate | null = null;
+  // Collections
+  servers: Server[] = [];
+  securitySchemes: { [key: string]: SecurityScheme } = {};
+  tags: Tag[] = [];
+  
+  // AWS API Gateway Extensions
+  enableAWSExtensions = false;
+  awsSettings = {
+    enableCORS: false,
+    enableRequestValidation: false,
+    enableMetrics: false,
+    enableTracing: false,
+    enableCaching: false,
+    defaultCacheTtl: 300,
+    defaultThrottleRate: 10000,
+    defaultThrottleBurst: 5000
+  };
+  
+  // Schema Types
+  schemaTypes = [
+    { value: 'string', label: 'String' },
+    { value: 'number', label: 'Number' },
+    { value: 'integer', label: 'Integer' },
+    { value: 'boolean', label: 'Boolean' },
+    { value: 'array', label: 'Array' },
+    { value: 'object', label: 'Object' }
+  ];
+  
+  // Security Types
+  securityTypes = [
+    { value: 'http', label: 'HTTP' },
+    { value: 'apiKey', label: 'API Key' },
+    { value: 'oauth2', label: 'OAuth 2.0' },
+    { value: 'openIdConnect', label: 'OpenID Connect' }
+  ];
+  
+  // API Key Locations
+  apiKeyLocations = [
+    { value: 'header', label: 'Header' },
+    { value: 'query', label: 'Query Parameter' },
+    { value: 'cookie', label: 'Cookie' }
+  ];
+  
+  // OAuth2 Flows
+  oauth2Flows = [
+    { value: 'implicit', label: 'Implicit' },
+    { value: 'authorizationCode', label: 'Authorization Code' },
+    { value: 'clientCredentials', label: 'Client Credentials' },
+    { value: 'password', label: 'Resource Owner Password' }
+  ];
+  
+  // HTTP Authentication Schemes
+  httpSchemes = [
+    { value: 'basic', label: 'Basic' },
+    { value: 'bearer', label: 'Bearer' },
+    { value: 'digest', label: 'Digest' },
+    { value: 'hoba', label: 'HOBA' },
+    { value: 'mutual', label: 'Mutual' },
+    { value: 'negotiate', label: 'Negotiate' },
+    { value: 'oauth', label: 'OAuth' },
+    { value: 'scram-sha-1', label: 'SCRAM-SHA-1' },
+    { value: 'scram-sha-256', label: 'SCRAM-SHA-256' },
+    { value: 'vapid', label: 'VAPID' }
+  ];
 
   constructor(
     private fb: FormBuilder,
     private router: Router,
     private snackBar: MatSnackBar,
     private openApiService: OpenApiService,
-    private electronService: ElectronService
+    private apiService: ApiService
   ) {
     this.gatewayForm = this.fb.group({});
     this.contactForm = this.fb.group({});
@@ -147,86 +201,93 @@ export class NewGatewayComponent implements OnInit {
     this.contactForm = this.fb.group({
       name: [''],
       email: ['', [Validators.email]],
-      url: ['']
+      url: ['', [Validators.pattern(/^https?:\/\/.+/)]]
     });
 
     this.serverForm = this.fb.group({
-      url: ['https://api.example.com', [Validators.required]],
-      description: ['Production server']
+      url: ['', [Validators.required, Validators.pattern(/^https?:\/\/.+/)]],
+      description: ['']
     });
   }
 
-  selectTemplate(template: GatewayTemplate): void {
-    this.selectedTemplate = template;
-    
-    if (template.template.info) {
-      this.gatewayForm.patchValue({
-        title: template.template.info.title,
-        version: template.template.info.version || '1.0.0',
-        description: template.template.info.description
-      });
+  // Server Management
+  addServer(): void {
+    if (this.serverForm.valid) {
+      this.servers.push(this.serverForm.value);
+      this.serverForm.reset();
     }
-    
-    this.generatePreview();
   }
 
-  generatePreview(): void {
-    const document = this.generateOpenAPIDocument();
-    
-    if (this.fileFormat === 'yaml') {
-      this.previewContent = this.openApiService.convertToYAML(document);
-    } else {
-      this.previewContent = this.openApiService.convertToJSON(document);
-    }
-    
-    this.showPreview = true;
+  removeServer(index: number): void {
+    this.servers.splice(index, 1);
   }
 
+  dropServer(event: CdkDragDrop<Server[]>): void {
+    moveItemInArray(this.servers, event.previousIndex, event.currentIndex);
+  }
+
+  // Tag Management
+  addTag(name: string, description?: string): void {
+    if (name && !this.tags.find(t => t.name === name)) {
+      this.tags.push({ name, description });
+    }
+  }
+
+  removeTag(index: number): void {
+    this.tags.splice(index, 1);
+  }
+
+  dropTag(event: CdkDragDrop<Tag[]>): void {
+    moveItemInArray(this.tags, event.previousIndex, event.currentIndex);
+  }
+
+  // Security Scheme Management
+  addSecurityScheme(name: string, scheme: SecurityScheme): void {
+    if (name && !this.securitySchemes[name]) {
+      this.securitySchemes[name] = scheme;
+    }
+  }
+
+  removeSecurityScheme(name: string): void {
+    delete this.securitySchemes[name];
+  }
+
+  getSecuritySchemeKeys(): string[] {
+    return Object.keys(this.securitySchemes);
+  }
+
+  // Generate OpenAPI Document
   private generateOpenAPIDocument(): OpenAPIDocument {
     const formValue = this.gatewayForm.value;
-    const contact = this.contactForm.value;
-    const server = this.serverForm.value;
+    const contactValue = this.contactForm.value;
     
     const document: OpenAPIDocument = {
-      openapi: '3.0.3',
+      openapi: '3.0.0',
       info: {
         title: formValue.title,
         version: formValue.version,
-        description: formValue.description || undefined,
-        termsOfService: formValue.termsOfService || undefined,
-        contact: (contact.name || contact.email || contact.url) ? {
-          name: contact.name || undefined,
-          email: contact.email || undefined,
-          url: contact.url || undefined
+        description: formValue.description,
+        termsOfService: formValue.termsOfService,
+        contact: contactValue.email || contactValue.name || contactValue.url ? {
+          name: contactValue.name,
+          email: contactValue.email,
+          url: contactValue.url
         } : undefined,
-        license: (formValue.license.name || formValue.license.url) ? {
-          name: formValue.license.name || undefined,
-          url: formValue.license.url || undefined
+        license: formValue.license?.name ? {
+          name: formValue.license.name,
+          url: formValue.license.url
         } : undefined
       },
-      servers: server.url ? [{
-        url: server.url,
-        description: server.description || undefined
-      }] : undefined,
+      servers: this.servers.length > 0 ? this.servers : undefined,
       paths: {},
-      components: this.selectedTemplate?.template.components || {
-        schemas: {},
-        responses: {},
-        parameters: {},
-        examples: {},
-        requestBodies: {},
-        headers: {},
-        securitySchemes: {},
-        links: {},
-        callbacks: {}
-      },
-      security: this.selectedTemplate?.template.security || undefined,
-      tags: [],
-      externalDocs: undefined
+      components: Object.keys(this.securitySchemes).length > 0 ? {
+        securitySchemes: this.securitySchemes
+      } : undefined,
+      tags: this.tags.length > 0 ? this.tags : undefined
     };
 
-    // Add AWS-specific extensions if AWS template is selected
-    if (this.selectedTemplate?.name === 'AWS API Gateway') {
+    // Add AWS API Gateway Extensions if enabled
+    if (this.enableAWSExtensions) {
       (document as any)['x-amazon-apigateway-request-validators'] = {
         all: {
           validateRequestBody: true,
@@ -248,86 +309,64 @@ export class NewGatewayComponent implements OnInit {
 
     const document = this.generateOpenAPIDocument();
     
-    // Validate the document
-    const validation = await this.openApiService.validateOpenAPI(document);
-    
-    if (!validation.valid) {
-      this.snackBar.open(`Invalid OpenAPI: ${validation.errors.join(', ')}`, 'Close', {
+    try {
+      // Create gateway configuration in backend
+      const config = await this.apiService.createGatewayConfig({
+        name: document.info.title,
+        version: document.info.version,
+        description: document.info.description,
+        openapiVersion: document.openapi,
+        metadata: {
+          servers: document.servers,
+          security: document.security,
+          tags: document.tags,
+          externalDocs: document.externalDocs,
+          components: document.components
+        }
+      }).toPromise();
+
+      if (config) {
+        // Load the created configuration
+        await this.openApiService.loadGatewayConfig(config.id);
+        
+        this.snackBar.open('Gateway created successfully!', 'Close', {
+          duration: 3000
+        });
+        
+        this.router.navigate(['/editor']);
+      }
+    } catch (error: any) {
+      this.snackBar.open(`Failed to create gateway: ${error.message}`, 'Close', {
         duration: 5000
       });
-      return;
-    }
-
-    // If in Electron, save to file system
-    if (this.electronService.isElectronApp()) {
-      const folderPath = await this.electronService.openFolder();
-      
-      if (folderPath) {
-        const fileName = `openapi.${this.fileFormat}`;
-        const filePath = `${folderPath}/${fileName}`;
-        
-        const content = this.fileFormat === 'yaml' 
-          ? this.openApiService.convertToYAML(document)
-          : this.openApiService.convertToJSON(document);
-        
-        const success = await this.electronService.writeFile(filePath, content);
-        
-        if (success) {
-          // Create README.md
-          await this.createReadme(folderPath, document);
-          
-          // Set as current project
-          this.openApiService.setCurrentProject({
-            name: document.info.title,
-            path: folderPath,
-            type: 'local',
-            openApiPath: filePath,
-            lastModified: new Date(),
-            isValid: true
-          });
-          
-          this.snackBar.open('Gateway created successfully!', 'Close', {
-            duration: 3000
-          });
-          
-          this.router.navigate(['/editor']);
-        } else {
-          this.snackBar.open('Failed to save gateway', 'Close', {
-            duration: 3000
-          });
-        }
-      }
-    } else {
-      // For web version, just navigate to editor with the document in memory
-      this.router.navigate(['/editor']);
     }
   }
 
-  private async createReadme(folderPath: string, document: OpenAPIDocument): Promise<void> {
-    const readmeContent = `# ${document.info.title}
+  selectTemplate(template: any): void {
+    this.selectedTemplate = template;
+    // You can add logic here to populate forms based on the selected template
+  }
 
-${document.info.description || 'API Gateway'}
+  generatePreview(): void {
+    const document = this.generateOpenAPIDocument();
+    
+    if (this.fileFormat === 'yaml') {
+      this.previewContent = yaml.dump(document, { indent: 2 });
+    } else {
+      this.previewContent = JSON.stringify(document, null, 2);
+    }
+  }
 
-## Version
-${document.info.version}
+  // Navigation
+  goBack(stepper: MatStepper): void {
+    stepper.previous();
+  }
 
-## Servers
-${document.servers?.map(s => `- ${s.url} - ${s.description || ''}`).join('\n') || '- No servers configured'}
-
-## ENDPOINTS
-
-<!-- This section will be automatically updated when endpoints are added -->
-
----
-
-Generated with AWS API Gateway Editor
-`;
-
-    const readmePath = `${folderPath}/README.md`;
-    await this.electronService.writeFile(readmePath, readmeContent);
+  goForward(stepper: MatStepper): void {
+    stepper.next();
   }
 
   cancel(): void {
-    this.router.navigate(['/home']);
+    this.router.navigate(['/']);
   }
 }

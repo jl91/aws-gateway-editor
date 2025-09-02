@@ -21,7 +21,7 @@ import { User } from '../../shared/entities/user.entity';
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
         entities: [GatewayConfig, GatewayEndpoint, ImportHistory, ExportCache, User],
-        synchronize: configService.get('NODE_ENV') === 'development',
+        synchronize: false, // Database schema is managed by init.sql
         logging: configService.get('NODE_ENV') === 'development',
         autoLoadEntities: true,
       }),

@@ -36,21 +36,21 @@ export class User {
   })
   role: UserRole;
 
-  @Column({ default: true })
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: 'last_login', nullable: true })
   lastLogin: Date;
 
-  @Column({ nullable: true })
-  refreshToken: string;
+  @Column({ name: 'refresh_token', type: 'text', nullable: true })
+  refreshToken: string | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date;
 }

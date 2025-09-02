@@ -25,7 +25,7 @@ export class ExportService {
 
   async exportConfig(configId: string, format: ExportFormat = ExportFormat.YAML) {
     const config = await this.configRepo.findOne({
-      where: { id: configId, deletedAt: null },
+      where: { id: configId },
     });
 
     if (!config) {
@@ -54,7 +54,6 @@ export class ExportService {
     const cached = await this.cacheRepo.find({
       where: {
         config: { id: configId },
-        expiresAt: null, // Or check if not expired
       },
     });
 
@@ -66,7 +65,7 @@ export class ExportService {
 
   private async generateOpenApiSpec(config: GatewayConfig): Promise<any> {
     const endpoints = await this.endpointRepo.find({
-      where: { config: { id: config.id }, deletedAt: null },
+      where: { config: { id: config.id } },
       order: { sequenceOrder: 'ASC' },
     });
 
@@ -85,13 +84,13 @@ export class ExportService {
       };
 
       // Add parameters
-      const parameters = [];
+      const parameters: any[] = [];
       if (endpoint.pathParams) {
         for (const [name, param] of Object.entries(endpoint.pathParams)) {
           parameters.push({
             name,
             in: 'path',
-            ...param,
+            ...(param as any),
           });
         }
       }
@@ -100,7 +99,7 @@ export class ExportService {
           parameters.push({
             name,
             in: 'query',
-            ...param,
+            ...(param as any),
           });
         }
       }
@@ -109,7 +108,7 @@ export class ExportService {
           parameters.push({
             name,
             in: 'header',
-            ...param,
+            ...(param as any),
           });
         }
       }

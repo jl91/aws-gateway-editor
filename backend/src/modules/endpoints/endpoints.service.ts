@@ -15,7 +15,7 @@ export class EndpointsService {
 
   async findAll(configId: string) {
     const config = await this.configRepo.findOne({
-      where: { id: configId, deletedAt: null },
+      where: { id: configId },
     });
 
     if (!config) {
@@ -23,7 +23,7 @@ export class EndpointsService {
     }
 
     const endpoints = await this.endpointRepo.find({
-      where: { config: { id: configId }, deletedAt: null },
+      where: { config: { id: configId } },
       order: { sequenceOrder: 'ASC' },
     });
 
@@ -35,7 +35,6 @@ export class EndpointsService {
       where: {
         id: endpointId,
         config: { id: configId },
-        deletedAt: null,
       },
       relations: ['config'],
     });
@@ -49,7 +48,7 @@ export class EndpointsService {
 
   async create(configId: string, createEndpointDto: CreateEndpointDto): Promise<GatewayEndpoint> {
     const config = await this.configRepo.findOne({
-      where: { id: configId, deletedAt: null },
+      where: { id: configId },
     });
 
     if (!config) {
@@ -62,7 +61,6 @@ export class EndpointsService {
         config: { id: configId },
         method: createEndpointDto.method,
         path: createEndpointDto.path,
-        deletedAt: null,
       },
     });
 
@@ -76,7 +74,6 @@ export class EndpointsService {
     const maxOrder = await this.endpointRepo
       .createQueryBuilder('endpoint')
       .where('endpoint.config = :configId', { configId })
-      .andWhere('endpoint.deletedAt IS NULL')
       .select('MAX(endpoint.sequenceOrder)', 'max')
       .getRawOne();
 
@@ -108,7 +105,6 @@ export class EndpointsService {
           config: { id: configId },
           method,
           path,
-          deletedAt: null,
         },
       });
 
@@ -129,7 +125,7 @@ export class EndpointsService {
 
   async reorder(configId: string, reorderDto: ReorderEndpointsDto): Promise<void> {
     const config = await this.configRepo.findOne({
-      where: { id: configId, deletedAt: null },
+      where: { id: configId },
     });
 
     if (!config) {
@@ -138,7 +134,7 @@ export class EndpointsService {
 
     // Validate all endpoint IDs belong to this config
     const endpoints = await this.endpointRepo.find({
-      where: { config: { id: configId }, deletedAt: null },
+      where: { config: { id: configId } },
     });
 
     const endpointIds = new Set(endpoints.map((e) => e.id));
