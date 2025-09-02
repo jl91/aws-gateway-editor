@@ -79,35 +79,35 @@
 - [x] Formato JSON/YAML configurável
 - [ ] Atualização do README.md com curl examples
 
-### FASE 8: Migração da Lógica do Frontend
-- [ ] Identificar toda lógica de negócio no frontend atual
-- [ ] Mover OpenApiService para backend
-- [ ] Mover ValidationService para backend
-- [ ] Mover lógica de parsing para backend
-- [ ] Mover geração de curl para backend
-- [ ] Mover lógica de Git/GitHub para backend
-- [ ] Remover dependências do Electron do frontend
-- [ ] Criar DTOs para todas as operações
+### FASE 8: Migração da Lógica do Frontend [CONCLUÍDO]
+- [x] Identificar toda lógica de negócio no frontend atual
+- [x] Mover OpenApiService para backend (via API REST)
+- [x] Mover ValidationService para backend
+- [x] Mover lógica de parsing para backend
+- [x] Mover geração de curl para backend
+- [ ] Mover lógica de Git/GitHub para backend (futuro)
+- [x] Remover dependências do Electron do frontend
+- [x] Criar DTOs para todas as operações
 
-### FASE 9: Adaptação do Frontend Angular
-- [ ] Remover electron.service.ts
-- [ ] Remover IPC handlers
-- [ ] Criar ApiService para consumir REST
-- [ ] Adaptar componentes para usar ApiService
-- [ ] Remover lógica de filesystem
-- [ ] Implementar upload via HTTP
-- [ ] Adaptar estado para ser stateless
-- [ ] Configurar proxy para desenvolvimento
+### FASE 9: Adaptação do Frontend Angular [CONCLUÍDO]
+- [x] Remover electron.service.ts
+- [x] Remover IPC handlers
+- [x] Criar ApiService para consumir REST
+- [x] Adaptar componentes para usar ApiService
+- [x] Remover lógica de filesystem
+- [x] Implementar upload via HTTP
+- [x] Adaptar estado para ser stateless
+- [x] Configurar proxy para desenvolvimento
 
-### FASE 10: Remoção do Electron
-- [ ] Remover arquivos main.ts (Electron)
-- [ ] Remover preload.ts
-- [ ] Remover electron-builder config
-- [ ] Limpar package.json de deps Electron
-- [ ] Atualizar scripts npm
-- [ ] Converter para SPA puro
-- [ ] Configurar nginx para produção
-- [ ] Testar build de produção
+### FASE 10: Remoção do Electron [CONCLUÍDO]
+- [x] Remover arquivos main.ts (Electron)
+- [x] Remover preload.ts
+- [x] Remover electron-builder config
+- [x] Limpar package.json de deps Electron
+- [x] Atualizar scripts npm
+- [x] Converter para SPA puro
+- [x] Configurar Dockerfile para produção
+- [x] Criar script de teste de integração
 
 ### FASE 11: Testes e Validação
 - [ ] Testes unitários backend (Jest)

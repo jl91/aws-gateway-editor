@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:3000/api',
+  apiUrl: 'http://localhost:3000',
   githubClientId: '',
   githubRedirectUri: 'http://localhost:4200/auth/callback',
-  version: '0.1.0'
+  version: '1.0.0'
 };

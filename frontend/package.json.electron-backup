@@ -1,25 +1,35 @@
 {
-  "name": "aws-api-gateway-editor-frontend",
-  "version": "1.0.0",
-  "description": "Frontend web para editor de contratos OpenAPI v3.x para API Gateways",
+  "name": "aws-api-gateway-editor",
+  "version": "0.1.0",
+  "description": "Editor desktop especializado em contratos OpenAPI v3.x para API Gateways",
+  "main": "dist/electron/main.js",
   "author": "John",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "ng serve --proxy-config proxy.conf.json",
-    "build": "ng build --configuration production",
+    "dev": "concurrently \"npm run dev:angular\" \"npm run dev:electron\"",
+    "dev:angular": "ng serve",
+    "dev:electron": "wait-on http://localhost:4200 && electron . --dev",
+    "build": "npm run build:angular && npm run build:electron",
+    "build:angular": "ng build --configuration production",
+    "build:electron": "tsc -p tsconfig.electron.json",
     "test": "ng test",
     "test:e2e": "playwright test",
-    "lint": "ng lint",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "lint": "ng lint && eslint src/electron/**/*.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.electron.json",
     "format": "prettier --write \"src/**/*.{ts,html,scss,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,html,scss,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss,json}\"",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "keywords": [
     "openapi",
     "swagger",
     "api-gateway",
     "aws",
+    "electron",
     "angular",
     "editor"
   ],
@@ -65,10 +75,39 @@
     "@types/node": "^22.10.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
+    "concurrently": "^9.1.0",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "husky": "^9.1.7",
     "prettier": "^3.4.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.john.aws-api-gateway-editor",
+    "productName": "AWS API Gateway Editor",
+    "directories": {
+      "output": "dist/installers"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icons/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icons/icon.png"
+    }
   }
 }

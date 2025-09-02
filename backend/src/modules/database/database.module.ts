@@ -7,6 +7,7 @@ import {
   ImportHistory,
   ExportCache,
 } from '../../shared/entities';
+import { User } from '../../shared/entities/user.entity';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import {
         username: configService.get('DB_USER'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
-        entities: [GatewayConfig, GatewayEndpoint, ImportHistory, ExportCache],
+        entities: [GatewayConfig, GatewayEndpoint, ImportHistory, ExportCache, User],
         synchronize: configService.get('NODE_ENV') === 'development',
         logging: configService.get('NODE_ENV') === 'development',
         autoLoadEntities: true,

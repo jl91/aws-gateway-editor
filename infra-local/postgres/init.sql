@@ -1,6 +1,27 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Create user roles enum
+CREATE TYPE user_role AS ENUM ('admin', 'editor', 'viewer');
+
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    role user_role DEFAULT 'editor',
+    is_active BOOLEAN DEFAULT true,
+    last_login TIMESTAMP WITH TIME ZONE,
+    refresh_token TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create index for email
+CREATE INDEX idx_users_email ON users(email) WHERE deleted_at IS NULL;
+
 -- Create gateway_configs table
 CREATE TABLE IF NOT EXISTS gateway_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
